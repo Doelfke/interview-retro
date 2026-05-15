@@ -1,0 +1,86 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# uv
+uv.lock
+
+
+# MLX model cache
+*.safetensors
+*.gguf
+models/
+model_cache/
+
+# Audio / transcription artifacts
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.ogg
+recordings/
+transcripts/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains
+.idea/
+
+# Logs
+*.log
+logs/
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# mypy / ruff / pyright
+.mypy_cache/
+.ruff_cache/
+.pyright/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Chrome extension build artifacts
+chrome-extension/*.zip
+chrome-extension/dist/
+
+# Misc
+*.bak
+*.swp
+*.swo
+{env:HOME}/

@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Interview Retro</title>
+<style>
+  /* ── Reset & Variables ─────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0f1117;
+    --surface:   #1a1d27;
+    --surface2:  #22263a;
+    --border:    #2e3348;
+    --text:      #e2e6f3;
+    --muted:     #8892b0;
+    --accent:    #6c8ef7;
+    --accent-dim:#3a4f9e;
+    --green:     #4ade80;
+    --yellow:    #fbbf24;
+    --red:       #f87171;
+    --radius:    10px;
+    --shadow:    0 4px 20px rgba(0,0,0,.4);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ────────────────────────────────────────────────────────────── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 24px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: .02em; }
+  header .subtitle { font-size: .8rem; color: var(--muted); }
+  header .subtitle a { font-size: .8rem; color: var(--accent); }
+  header .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green); margin-left: auto; flex-shrink: 0;
+  }
+  header .status-dot.offline { background: var(--red); }
+  header .status-label { font-size: .75rem; color: var(--muted); }
+
+  /* ── Layout ────────────────────────────────────────────────────────────── */
+  .layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ───────────────────────────────────────────────────────────── */
+  aside {
+    width: 300px;
+    min-width: 220px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .sidebar-header {
+    padding: 14px 16px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-header span { font-size: .75rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); }
+
+  .meeting-list {
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .meeting-item {
+    padding: 10px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    transition: background .12s;
+  }
+  .meeting-item:hover { background: var(--surface2); }
+  .meeting-item.active { background: var(--accent-dim); border-left: 3px solid var(--accent); }
+
+  .meeting-name { font-size: .9rem; font-weight: 500; }
+  .meeting-meta {
+    display: flex; gap: 8px; align-items: center; margin-top: 4px;
+    font-size: .72rem; color: var(--muted);
+  }
+
+  /* ── Stage badge ───────────────────────────────────────────────────────── */
+  .badge {
+    padding: 1px 7px; border-radius: 12px; font-size: .68rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .badge-applied   { background: #1e3a5f; color: #60a5fa; }
+  .badge-phone     { background: #1e3a2f; color: #4ade80; }
+  .badge-technical { background: #2a2a1e; color: #fbbf24; }
+  .badge-onsite    { background: #2e1e3a; color: #c084fc; }
+  .badge-offer     { background: #1e3a2a; color: #34d399; }
+  .badge-rejected  { background: #3a1e1e; color: #f87171; }
+  .badge-recording { background: #1e2a3a; color: #93c5fd; }
+  .badge-default   { background: var(--surface2); color: var(--muted); }
+
+  /* ── Empty state ───────────────────────────────────────────────────────── */
+  .empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    flex: 1; gap: 8px; color: var(--muted); font-size: .85rem; padding: 32px;
+    text-align: center;
+  }
+  .empty .icon { font-size: 2.5rem; }
+
+  /* ── Main panel ─────────────────────────────────────────────────────────── */
+  main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px 32px;
+  }
+
+  .back-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: .8rem; color: var(--muted); cursor: pointer;
+    margin-bottom: 20px; transition: color .12s;
+  }
+  .back-link:hover { color: var(--text); }
+
+  /* ── Rename ──────────────────────────────────────────────────────────────── */
+  .rename-btn {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: .8rem; padding: 2px 6px; border-radius: 4px;
+    vertical-align: middle; transition: color .15s; margin-left: 6px;
+  }
+  .rename-btn:hover { color: var(--accent); }
+  .delete-btn {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: .8rem; padding: 2px 6px; border-radius: 4px;
+    vertical-align: middle; transition: color .15s; margin-left: 2px;
+  }
+  .delete-btn:hover { color: var(--red); }
+  .rename-input {
+    background: var(--surface2); border: 1px solid var(--accent);
+    border-radius: 4px; color: var(--text); font-size: 1.3rem; font-weight: 700;
+    padding: 2px 8px; outline: none; flex: 1; min-width: 0;
+  }
+
+  .meta-row {
+    font-size: .8rem; color: var(--muted); margin-bottom: 24px; display: flex;
+    gap: 16px; flex-wrap: wrap;
+  }
+
+  .section-label {
+    font-size: .75rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); margin-bottom: 10px;
+  }
+
+  /* ── Interview cards ────────────────────────────────────────────────────── */
+  .interview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+    margin-bottom: 32px;
+  }
+
+  .interview-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    cursor: pointer;
+    transition: border-color .15s, box-shadow .15s, transform .1s;
+  }
+  .interview-card:hover {
+    border-color: var(--accent);
+    box-shadow: var(--shadow);
+    transform: translateY(-1px);
+  }
+
+  .interview-card-title { font-size: .9rem; font-weight: 600; margin-bottom: 8px; }
+  .interview-card-meta { font-size: .75rem; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
+
+  .score-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: .8rem; font-weight: 700; margin-top: 10px;
+  }
+  .score-high { color: var(--green); }
+  .score-mid  { color: var(--yellow); }
+  .score-low  { color: var(--red); }
+
+  .status-pill {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .status-queued   { background: #1e2a3a; color: #93c5fd; }
+  .status-complete { background: #1a3a20; color: #4ade80; }
+  .status-pending  { background: #2a2a1e; color: #fbbf24; }
+  .status-failed   { background: #3a1e1e; color: #f87171; }
+  .status-skipped  { background: #2a2a2a; color: #9ca3af; }
+
+  /* ── Interview detail ───────────────────────────────────────────────────── */
+  .detail-header {
+    display: flex; align-items: flex-start; gap: 20px;
+    flex-wrap: wrap; margin-bottom: 28px;
+  }
+  .detail-score-ring {
+    width: 72px; height: 72px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem; font-weight: 800; flex-shrink: 0;
+    border: 4px solid;
+  }
+  .detail-score-ring.high { border-color: var(--green); color: var(--green); }
+  .detail-score-ring.mid  { border-color: var(--yellow); color: var(--yellow); }
+  .detail-score-ring.low  { border-color: var(--red); color: var(--red); }
+  .detail-score-ring.none { border-color: var(--border); color: var(--muted); font-size: .9rem; }
+
+  .detail-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 4px; }
+  .detail-meta  { font-size: .78rem; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; }
+
+  /* ── Cards row (strengths / weaknesses) ───────────────────────────────── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px;
+  }
+  .card h3 { font-size: .8rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .07em; margin-bottom: 10px; }
+  .card h3.green { color: var(--green); }
+  .card h3.red   { color: var(--red); }
+
+  .card ul { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .card ul li {
+    font-size: .82rem; color: var(--muted); padding-left: 14px; position: relative;
+    line-height: 1.4;
+  }
+  .card ul li::before { content: "•"; position: absolute; left: 0; color: inherit; }
+  .card.green ul li::before { color: var(--green); }
+  .card.red   ul li::before { color: var(--red); }
+
+  /* ── Summary block ──────────────────────────────────────────────────────── */
+  .summary-block {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 20px;
+    font-size: .85rem; line-height: 1.65; color: var(--text);
+    margin-bottom: 24px;
+  }
+
+  /* ── QA pairs ───────────────────────────────────────────────────────────── */
+  .qa-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .qa-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+  }
+
+  .qa-header {
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    cursor: pointer; user-select: none;
+  }
+  .qa-header:hover { background: var(--surface2); }
+
+  .qa-score {
+    min-width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .8rem; font-weight: 700; flex-shrink: 0;
+  }
+  .qa-score.high { background: #1a3a20; color: var(--green); }
+  .qa-score.mid  { background: #2a2a18; color: var(--yellow); }
+  .qa-score.low  { background: #3a1e1e; color: var(--red); }
+  .qa-score.none { background: var(--surface2); color: var(--muted); }
+
+  .qa-question { font-size: .85rem; font-weight: 500; flex: 1; line-height: 1.4; }
+  .qa-cat {
+    font-size: .68rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .05em; padding: 2px 8px; border-radius: 10px;
+    background: var(--surface2); color: var(--muted); flex-shrink: 0;
+  }
+  .qa-chevron { color: var(--muted); font-size: .75rem; flex-shrink: 0; transition: transform .2s; }
+  .qa-item.open .qa-chevron { transform: rotate(90deg); }
+
+  .qa-delete-btn {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: .75rem; padding: 2px 4px; border-radius: 4px;
+    flex-shrink: 0; transition: color .15s; line-height: 1;
+  }
+  .qa-delete-btn:hover { color: var(--red); }
+
+  /* ── Potential score (header arrow + badge) ─────────────────────────────── */
+  .qa-potential-arrow { font-size: .72rem; color: var(--muted); flex-shrink: 0; line-height: 32px; }
+
+  /* ── Potential overall score (detail header) ────────────────────────────── */
+  .potential-overall-label { font-size: .68rem; color: var(--muted); text-align: center; margin-top: 2px; }
+  .potential-overall-value { font-size: .88rem; font-weight: 700; text-align: center; }
+  .potential-overall-value.high { color: var(--green); }
+  .potential-overall-value.mid  { color: var(--yellow); }
+  .potential-overall-value.low  { color: var(--red); }
+  .potential-overall-value.none { color: var(--muted); }
+
+  /* ── Try new answer UI ──────────────────────────────────────────────────── */
+  .try-answer-section {
+    margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px;
+  }
+  .btn-try-new {
+    background: none; border: 1px dashed var(--border); color: var(--muted);
+    border-radius: 6px; padding: 6px 12px; font-size: .78rem; cursor: pointer;
+    transition: border-color .15s, color .15s; width: 100%;
+  }
+  .btn-try-new:hover { border-color: var(--accent); color: var(--accent); }
+  .try-textarea {
+    width: 100%; min-height: 90px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 6px; color: var(--text);
+    font-size: .82rem; line-height: 1.55; padding: 10px 12px;
+    resize: vertical; outline: none; font-family: inherit; margin-top: 8px;
+  }
+  .try-textarea:focus { border-color: var(--accent); }
+  .try-btn-row { display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end; }
+  .btn-regrade {
+    background: var(--accent); color: #fff; border: none; border-radius: 6px;
+    padding: 6px 14px; font-size: .8rem; cursor: pointer; font-weight: 600;
+    transition: opacity .15s;
+  }
+  .btn-regrade:hover { opacity: .85; }
+  .btn-regrade:disabled { opacity: .5; cursor: default; }
+  .btn-cancel-regrade {
+    background: var(--surface2); color: var(--muted); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 12px; font-size: .8rem; cursor: pointer;
+    transition: color .15s;
+  }
+  .btn-cancel-regrade:hover { color: var(--text); }
+
+  .qa-body { display: none; padding: 14px 16px 16px; border-top: 1px solid var(--border); }
+  .qa-item.open .qa-body { display: block; }
+
+  .qa-section { margin-top: 14px; }
+  .qa-section-label {
+    font-size: .75rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .07em; color: #9aa3bf; margin-bottom: 6px;
+  }
+  .qa-section-text { font-size: .84rem; line-height: 1.65; color: var(--text); }
+  .qa-section-text.answer { color: #c4cde3; }
+  .qa-section-text.suggested {
+    background: #1a2a1e; border-left: 3px solid var(--green);
+    border-radius: 0 6px 6px 0; padding: 10px 14px; color: var(--text);
+  }
+  .qa-section-text.feedback {
+    background: #252b40; border: 1px solid #3c4560;
+    border-radius: 6px; padding: 12px 14px; color: #d2daf0;
+    line-height: 1.7;
+  }
+
+  .qa-potential-section {
+    margin-top: 20px;
+    background: #13172a;
+    border: 1px solid var(--accent-dim);
+    border-top: 2px solid var(--accent);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .qa-potential-section .qa-section-label.accent {
+    color: var(--accent); font-size: .8rem; letter-spacing: .04em;
+  }
+  .qa-potential-section .qa-section { margin-top: 14px; }
+
+  /* ── Scrollbar ──────────────────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  /* ── Loading spinner ────────────────────────────────────────────────────── */
+  .spinner {
+    width: 24px; height: 24px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin .7s linear infinite; margin: 40px auto;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Responsive ─────────────────────────────────────────────────────────── */
+  @media (max-width: 640px) {
+    aside { width: 220px; }
+    main  { padding: 16px; }
+    .two-col { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ───────────────────────────────────────────────────────────── -->
+<header>
+  <div>
+    <h1>Interview Retro</h1>
+    <div class="subtitle">Powered by <a href="https://jobound.io" target="_blank">JoBound</a></div>
+  </div>
+  <div id="statusDot" class="status-dot offline" title="Backend status"></div>
+  <span id="statusLabel" class="status-label">Checking…</span>
+</header>
+
+<!-- ── Layout ───────────────────────────────────────────────────────────── -->
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside>
+    <div class="sidebar-header">
+      <span>Meetings</span>
+    </div>
+    <div class="meeting-list" id="meetingList">
+      <div class="spinner"></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main id="main">
+    <div class="empty">
+      <div class="icon">📋</div>
+      <div>Select a meeting to view details</div>
+    </div>
+  </main>
+
+</div>
+
+<script>
+// ── Config ─────────────────────────────────────────────────────────────────
+// Browsers block file:// → http:// requests regardless of CORS headers.
+// Redirect to the server URL so the page is served same-origin.
+if (window.location.protocol === 'file:') {
+  window.location.replace('http://127.0.0.1:8765/dashboard');
+}
+const API = '';
+
+// ── State ──────────────────────────────────────────────────────────────────
+let meetings = [];
+let activeMeetingId = null;
+let wasWorking = false;
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+async function fetchJSON(url) {
+  const r = await fetch(API + url);
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
+}
+
+function scoreClass(s) {
+  if (s == null) return 'none';
+  if (s >= 7)   return 'high';
+  if (s >= 5)   return 'mid';
+  return 'low';
+}
+
+function stageBadgeClass(stage) {
+  if (!stage) return 'badge-default';
+  const s = stage.toLowerCase();
+  if (s.includes('apply') || s === 'applied')    return 'badge-applied';
+  if (s.includes('phone'))                        return 'badge-phone';
+  if (s.includes('tech'))                         return 'badge-technical';
+  if (s.includes('onsite') || s.includes('on-site')) return 'badge-onsite';
+  if (s.includes('offer'))                        return 'badge-offer';
+  if (s.includes('reject'))                       return 'badge-rejected';
+  if (s.includes('record'))                       return 'badge-recording';
+  return 'badge-default';
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function fmtDuration(secs) {
+  if (!secs) return null;
+  const m = Math.floor(secs / 60), s = secs % 60;
+  return `${m}m ${s}s`;
+}
+
+// ── Status polling ─────────────────────────────────────────────────────────
+async function checkStatus() {
+  try {
+    const data = await fetchJSON('/status');
+    document.getElementById('statusDot').className = 'status-dot';
+    const depth = data.analysis_queue_depth ?? 0;
+    const analyzing = data.currently_analyzing ?? false;
+    if (analyzing) {
+      document.getElementById('statusLabel').textContent =
+        depth > 0 ? `Analyzing… (${depth} queued)` : 'Analyzing…';
+    } else {
+      document.getElementById('statusLabel').textContent =
+        depth > 0 ? `Queue: ${depth}` : 'Idle';
+    }
+
+    // While work is in-flight, or on the first idle tick after completing, refresh the UI
+    const isWorking = analyzing || depth > 0;
+    if (isWorking || wasWorking) {
+      await refreshMeetingsSilently();
+      if (activeMeetingId) await refreshDetailSilently(activeMeetingId);
+    }
+    wasWorking = isWorking;
+  } catch {
+    document.getElementById('statusDot').className = 'status-dot offline';
+    document.getElementById('statusLabel').textContent = 'Offline';
+  }
+}
+setInterval(checkStatus, 3000);
+checkStatus();
+
+// ── Silent background refresh (no spinner) ────────────────────────────────
+async function refreshMeetingsSilently() {
+  try {
+    meetings = await fetchJSON('/api/interviews');
+    renderMeetingList();
+  } catch { /* ignore */ }
+}
+
+async function refreshDetailSilently(interviewId) {
+  try {
+    const data = await fetchJSON(`/api/interviews/${interviewId}`);
+    renderInterviewDetail(data);
+  } catch { /* ignore */ }
+}
+
+// ── Meetings list ─────────────────────────────────────────────────────────
+async function loadMeetings() {
+  const list = document.getElementById('meetingList');
+  list.innerHTML = '<div class="spinner"></div>';
+  try {
+    meetings = await fetchJSON('/api/interviews');
+    renderMeetingList();
+  } catch (e) {
+    list.innerHTML = `<div class="empty"><div class="icon">⚠️</div><div>${e.message}</div></div>`;
+  }
+}
+
+function renderMeetingList() {
+  const list = document.getElementById('meetingList');
+  if (!meetings.length) {
+    list.innerHTML = `<div class="empty"><div class="icon">💬</div><div>No meetings yet</div></div>`;
+    return;
+  }
+  list.innerHTML = meetings.map(m => {
+    const sc = m.overall_score;
+    const scoreHtml = sc != null
+      ? `<span class="score-${scoreClass(sc)}">★ ${sc.toFixed(1)}</span>`
+      : '';
+    const potentialHtml = m.has_potential_scores && m.potential_overall_score != null
+      ? `<span class="score-${scoreClass(m.potential_overall_score)}" title="Potential score with new answers">→ ${m.potential_overall_score.toFixed(1)}</span>`
+      : '';
+    const statusHtml = m.analysis_status
+      ? `<span class="status-pill status-${m.analysis_status}">${m.analysis_status}</span>` : '';
+    return `
+      <div class="meeting-item ${m.id === activeMeetingId ? 'active' : ''}"
+           onclick="selectMeeting('${m.id}')">
+        <div class="meeting-name">${esc(m.title || 'Untitled Meeting')}</div>
+        <div class="meeting-meta">
+          ${m.start_time ? `<span>${fmtDate(m.start_time)}</span>` : ''}
+          ${statusHtml}
+          ${scoreHtml}
+          ${potentialHtml}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── Meeting selection ─────────────────────────────────────────────────────
+async function selectMeeting(meetingId) {
+  activeMeetingId = meetingId;
+  renderMeetingList();
+  await selectInterview(meetingId);
+}
+
+function showEmpty() {
+  activeMeetingId = null;
+  renderMeetingList();
+  document.getElementById('main').innerHTML = `
+    <div class="empty">
+      <div class="icon">📋</div>
+      <div>Select a meeting to view details</div>
+    </div>
+  `;
+}
+
+// ── Interview detail ───────────────────────────────────────────────────────
+async function selectInterview(interviewId) {
+  const main = document.getElementById('main');
+  main.innerHTML = '<div class="spinner"></div>';
+  try {
+    const data = await fetchJSON(`/api/interviews/${interviewId}`);
+    renderInterviewDetail(data);
+  } catch (e) {
+    main.innerHTML = `<div class="empty"><div class="icon">⚠️</div><div>${e.message}</div></div>`;
+  }
+}
+
+function renderInterviewDetail(data) {
+  const main = document.getElementById('main');
+  const sc = data.overall_score;
+  const scClass = scoreClass(sc);
+  const scoreDisplay = sc != null ? sc.toFixed(1) : '—';
+
+  // Potential overall score — only shown if at least one QA has been re-graded
+  const hasPotential = (data.qa_pairs || []).some(q => q.potential_score != null);
+  const potentialOverall = data.potential_overall_score;
+  const potentialScoreHtml = hasPotential && potentialOverall != null
+    ? `<div class="potential-overall-label">potential</div>
+       <div class="potential-overall-value ${scoreClass(potentialOverall)}">→ ${potentialOverall.toFixed(1)}</div>`
+    : '';
+
+  const summaryHtml = data.summary
+    ? `<div class="section-label">Summary</div>
+       <div class="summary-block">${esc(data.summary)}</div>`
+    : '';
+
+  const strengthsHtml = (data.strengths || []).length
+    ? `<div class="card green">
+         <h3 class="green">Strengths</h3>
+         <ul>${(data.strengths).map(s => `<li>${esc(s)}</li>`).join('')}</ul>
+       </div>` : '';
+
+  const weaknessesHtml = (data.weaknesses || []).length
+    ? `<div class="card red">
+         <h3 class="red">Areas to improve</h3>
+         <ul>${(data.weaknesses).map(w => `<li>${esc(w)}</li>`).join('')}</ul>
+       </div>` : '';
+
+  const swHtml = (strengthsHtml || weaknessesHtml)
+    ? `<div class="two-col">${strengthsHtml}${weaknessesHtml}</div>` : '';
+
+  const qaHtml = (data.qa_pairs || []).length
+    ? `<div class="section-label">Q &amp; A Analysis (${data.qa_pairs.length})</div>
+       <div class="qa-list">${data.qa_pairs.map((q, idx) => qaItem(q, idx)).join('')}</div>`
+    : (data.analysis_status === 'complete'
+        ? `<div class="section-label">Q &amp; A Analysis</div>
+           <div class="empty" style="flex:none;padding:24px 0;color:var(--muted)">No Q&amp;A pairs extracted</div>`
+        : '');
+
+  const errorHtml = data.analysis_error
+    ? `<div class="card" style="border-color:var(--red);margin-bottom:20px">
+         <h3 style="color:var(--red)">Analysis error</h3>
+         <p style="font-size:.82rem;color:var(--muted);margin-top:8px">${esc(data.analysis_error)}</p>
+       </div>` : '';
+
+  main.innerHTML = `
+    <div class="back-link" onclick="showEmpty()">← Back</div>
+    <div class="detail-header">
+      <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+        <div class="detail-score-ring ${scClass}">
+          ${scoreDisplay}
+        </div>
+        ${potentialScoreHtml}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div class="detail-title" style="display:flex;align-items:center;gap:4px">
+          <span id="meetingTitleText">${esc(data.title || 'Interview')}</span>
+          <button class="rename-btn" onclick="startRename('${data.id}')" title="Rename meeting">✎</button>
+          <button class="delete-btn" onclick="deleteInterview('${data.id}')" title="Delete interview">🗑</button>
+        </div>
+        <div class="detail-meta">
+          ${data.start_time ? `<span>${fmtDate(data.start_time)}</span>` : ''}
+          ${data.stage ? `<span class="badge ${stageBadgeClass(data.stage)}">${esc(data.stage)}</span>` : ''}
+          ${data.duration_seconds ? `<span>${fmtDuration(data.duration_seconds)}</span>` : ''}
+          <span class="status-pill status-${data.analysis_status}">${data.analysis_status || 'unknown'}</span>
+          <span>${data.transcript_char_count.toLocaleString()} chars transcript</span>
+        </div>
+      </div>
+    </div>
+    ${errorHtml}
+    ${summaryHtml}
+    ${swHtml}
+    ${qaHtml}
+  `;
+}
+
+// ── Rename meeting ─────────────────────────────────────────────────────────
+function startRename(meetingId) {
+  const titleEl = document.getElementById('meetingTitleText');
+  if (!titleEl) return;
+  const currentTitle = titleEl.textContent;
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = currentTitle;
+  input.className = 'rename-input';
+  titleEl.replaceWith(input);
+  input.focus();
+  input.select();
+
+  const revert = () => {
+    const span = document.createElement('span');
+    span.id = 'meetingTitleText';
+    span.textContent = currentTitle;
+    if (input.parentNode) input.replaceWith(span);
+  };
+
+  const save = async () => {
+    const newTitle = input.value.trim();
+    if (!newTitle || newTitle === currentTitle) { revert(); return; }
+    try {
+      await fetch(`${API}/api/interviews/${meetingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTitle }),
+      });
+      const span = document.createElement('span');
+      span.id = 'meetingTitleText';
+      span.textContent = newTitle;
+      if (input.parentNode) input.replaceWith(span);
+      const meeting = meetings.find(m => m.id === meetingId);
+      if (meeting) { meeting.title = newTitle; renderMeetingList(); }
+    } catch (e) {
+      revert();
+      alert('Failed to rename: ' + e.message);
+    }
+  };
+
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { input.removeEventListener('blur', save); revert(); }
+  });
+}
+
+// ── Delete QA pair ────────────────────────────────────────────────────────
+async function deleteQAPair(event, interviewId, qaId, idx) {
+  event.stopPropagation();
+  if (!confirm('Delete this question? The interview score will be recalculated.')) return;
+  try {
+    const r = await fetch(`${API}/api/interviews/${interviewId}/qa/${qaId}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    const result = await r.json();
+    // Update sidebar scores immediately
+    const meeting = meetings.find(m => m.id === interviewId);
+    if (meeting) {
+      meeting.overall_score = result.overall_score ?? null;
+      meeting.potential_overall_score = result.potential_overall_score ?? null;
+      meeting.has_potential_scores = result.has_potential_scores ?? false;
+      renderMeetingList();
+    }
+    // Re-render detail with fresh data (score ring + QA list)
+    await selectInterview(interviewId);
+  } catch (e) {
+    alert('Failed to delete question: ' + e.message);
+  }
+}
+
+// ── Delete interview ──────────────────────────────────────────────────────
+async function deleteInterview(interviewId) {
+  const meeting = meetings.find(m => m.id === interviewId);
+  const name = meeting ? (meeting.title || 'this interview') : 'this interview';
+  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  try {
+    const r = await fetch(`${API}/api/interviews/${interviewId}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    meetings = meetings.filter(m => m.id !== interviewId);
+    showEmpty();
+  } catch (e) {
+    alert('Failed to delete: ' + e.message);
+  }
+}
+
+function qaItem(q, idx) {
+  const sc = q.score;
+  const scClass = scoreClass(sc);
+  const scoreDisplay = sc != null ? sc.toFixed(1) : '?';
+  const interviewId = q.interview_id;
+
+  // Potential score badge shown next to original in the header
+  const potentialScoreHtml = q.potential_score != null
+    ? `<span class="qa-potential-arrow">→</span>
+       <div class="qa-score ${scoreClass(q.potential_score)}" title="Potential score with your new answer">${q.potential_score.toFixed(1)}</div>`
+    : '';
+
+  const answerHtml = q.answer
+    ? `<div class="qa-section">
+         <div class="qa-section-label">Answer</div>
+         <div class="qa-section-text answer">${esc(q.answer)}</div>
+       </div>` : '';
+
+  const feedbackHtml = q.feedback
+    ? `<div class="qa-section">
+         <div class="qa-section-label">Feedback</div>
+         <div class="qa-section-text feedback">${esc(q.feedback)}</div>
+       </div>` : '';
+
+  const suggestedHtml = q.suggested_answer
+    ? `<div class="qa-section">
+         <div class="qa-section-label">💡 Better answer</div>
+         <div class="qa-section-text suggested">${esc(q.suggested_answer)}</div>
+       </div>` : '';
+
+  // Potential answer section (if a new answer has been tried and graded)
+  const potentialAnswerHtml = q.potential_answer
+    ? `<div class="qa-potential-section">
+         <div class="qa-section-label accent">
+           Your new answer — scored ${q.potential_score != null ? q.potential_score.toFixed(1) + '/10' : '?'}
+         </div>
+         <div class="qa-section-text answer">${esc(q.potential_answer)}</div>
+         ${q.potential_feedback ? `<div class="qa-section"><div class="qa-section-label">Feedback</div>
+         <div class="qa-section-text feedback">${esc(q.potential_feedback)}</div></div>` : ''}
+         ${q.potential_suggested_answer ? `<div class="qa-section"><div class="qa-section-label">💡 Better answer</div>
+         <div class="qa-section-text suggested">${esc(q.potential_suggested_answer)}</div></div>` : ''}
+       </div>` : '';
+
+  const tryBtnLabel = q.potential_answer ? '✏️ Try another answer' : '💬 Try a new answer';
+  const tryAnswerSection = `
+    <div class="try-answer-section">
+      ${potentialAnswerHtml}
+      <button class="btn-try-new" id="try-btn-${idx}"
+              onclick="showTryAnswer(${idx}, '${interviewId}', '${q.id}')">
+        ${tryBtnLabel}
+      </button>
+      <div id="try-form-${idx}" style="display:none">
+        <textarea id="try-textarea-${idx}" class="try-textarea"
+                  placeholder="Write a better answer…"></textarea>
+        <div class="try-btn-row">
+          <button class="btn-cancel-regrade" onclick="cancelTryAnswer(${idx})">Cancel</button>
+          <button class="btn-regrade" id="regrade-btn-${idx}"
+                  onclick="submitRegrade(${idx}, '${interviewId}', '${q.id}')">Re-grade</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  return `
+    <div class="qa-item" id="qa-${idx}">
+      <div class="qa-header" onclick="toggleQA(${idx})">
+        <div class="qa-score ${scClass}">${scoreDisplay}</div>
+        ${potentialScoreHtml}
+        <div class="qa-question">${esc(q.question)}</div>
+        ${q.category ? `<span class="qa-cat">${esc(q.category)}</span>` : ''}
+        <button class="qa-delete-btn" onclick="deleteQAPair(event, '${interviewId}', '${q.id}', ${idx})" title="Delete this question">🗑</button>
+        <span class="qa-chevron">▶</span>
+      </div>
+      <div class="qa-body">
+        ${answerHtml}
+        ${feedbackHtml}
+        ${suggestedHtml}
+        ${tryAnswerSection}
+      </div>
+    </div>
+  `;
+}
+
+function toggleQA(idx) {
+  const el = document.getElementById(`qa-${idx}`);
+  el.classList.toggle('open');
+}
+
+// ── Try new answer ─────────────────────────────────────────────────────────
+function showTryAnswer(idx, interviewId, qaId) {
+  const formEl = document.getElementById(`try-form-${idx}`);
+  const btnEl  = document.getElementById(`try-btn-${idx}`);
+  if (!formEl) return;
+  formEl.style.display = 'block';
+  if (btnEl) btnEl.style.display = 'none';
+  const ta = document.getElementById(`try-textarea-${idx}`);
+  if (ta) ta.focus();
+}
+
+function cancelTryAnswer(idx) {
+  const formEl = document.getElementById(`try-form-${idx}`);
+  const btnEl  = document.getElementById(`try-btn-${idx}`);
+  if (formEl) formEl.style.display = 'none';
+  if (btnEl) btnEl.style.display = 'block';
+}
+
+async function submitRegrade(idx, interviewId, qaId) {
+  const ta = document.getElementById(`try-textarea-${idx}`);
+  const newAnswer = ta ? ta.value.trim() : '';
+  if (!newAnswer) return;
+
+  const regradeBtn = document.getElementById(`regrade-btn-${idx}`);
+  if (regradeBtn) { regradeBtn.disabled = true; regradeBtn.textContent = 'Grading…'; }
+
+  try {
+    const r = await fetch(`${API}/api/interviews/${interviewId}/qa/${qaId}/regrade`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_answer: newAnswer }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || `${r.status} ${r.statusText}`);
+    }
+    const result = await r.json();
+
+    // Update sidebar potential score immediately
+    const meeting = meetings.find(m => m.id === interviewId);
+    if (meeting) {
+      meeting.potential_overall_score = result.potential_overall_score;
+      meeting.has_potential_scores = true;
+      renderMeetingList();
+    }
+
+    // Refresh detail view with new scores from DB
+    await selectInterview(interviewId);
+  } catch (e) {
+    alert('Failed to re-grade: ' + e.message);
+    if (regradeBtn) { regradeBtn.disabled = false; regradeBtn.textContent = 'Re-grade'; }
+  }
+}
+
+// ── XSS-safe escaping ──────────────────────────────────────────────────────
+function esc(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+loadMeetings();
+</script>
+</body>
+</html>

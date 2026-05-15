@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "bash": "node .github/hooks/agentStop.js",
+        "powershell": "node .github/hooks/agentStop.js",
+        "osx": "node .github/hooks/agentStop.js --format=vscode",
+        "linux": "node .github/hooks/agentStop.js --format=vscode",
+        "windows": "node .github/hooks/agentStop.js --format=vscode",
+        "timeoutSec": 120
+      }
+    ]
+  }
+}
