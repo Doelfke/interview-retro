@@ -41,7 +41,7 @@ build-backend = "hatchling.build"
 packages = ["backend"]
 
 [tool.uv]
-# uv automatically selects arm64 wheels for mlx, mlx-lm, and mlx-whisper
+# uv automatically selects arm64 wheels for mlx and mlx-lm
 
 [[tool.uv.index]]
 url = "https://pypi.org/simple"

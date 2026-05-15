@@ -6,7 +6,6 @@ No cloud APIs. No audio, transcript, or score ever leaves your machine.
 | Component | Technology | RAM |
 |-----------|-----------|-----|
 | LLM (CrewAI) | mlx-lm — `Qwen2.5-32B-Instruct-4bit` | ~18 GB unified |
-| Transcription | mlx-whisper `large-v3-turbo` via Metal | ~2 GB |
 | Storage | SQLite → iCloud Drive | — |
 
 ---
@@ -70,10 +69,10 @@ Test new responses
 ## Quick Start
 
 ```bash
-# 1. Run setup (installs ffmpeg + uv, pulls model, pre-warms Whisper)
+# 1. Run setup
 ./setup.sh
 
-# 2. Start everything (mlx_lm.server launches automatically)
+# 2. Start it
 uv run python backend/server.py
 ```
 
@@ -92,6 +91,5 @@ Auto-syncs to all Apple devices via iCloud Drive.
 ## Privacy
 
 - ✅ LLM inference on-device via mlx-lm + Metal
-- ✅ Whisper transcription on-device via Metal
 - ✅ Data stored in iCloud Drive (Apple-encrypted at rest)
 - ✅ No telemetry, no accounts, no subscriptions
