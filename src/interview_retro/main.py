@@ -21,9 +21,9 @@ class RetroState(FlowState):
     quality_issues: list[str] = Field(default_factory=list)
     last_failure_reason: str = ""
 
-    checkpoint_qa_pairs: list[dict[str, Any]] = Field(default_factory=list)
-    checkpoint_advocacy: list[dict[str, Any]] = Field(default_factory=list)
-    checkpoint_criticism: list[dict[str, Any]] = Field(default_factory=list)
+    checkpoint_qa_pairs: list[dict[str, Any]] = []  # type: ignore[assignment]
+    checkpoint_advocacy: list[dict[str, Any]] = []  # type: ignore[assignment]
+    checkpoint_criticism: list[dict[str, Any]] = []  # type: ignore[assignment]
 
     last_result: dict[str, Any] = Field(default_factory=dict)
 
@@ -40,7 +40,7 @@ def _check_quality(
         return ["extraction_empty"], "retry_extraction"
 
     issues: list[str] = []
-    rated = result.get("rated_qa") or []
+    rated: list[Any] = result.get("rated_qa") or []
     if len(rated) < qa_pairs_extracted:
         issues.append(f"thin_output: {len(rated)}/{qa_pairs_extracted} pairs rated")
     if not result.get("rated_qa") or result.get("overall_score") is None:
