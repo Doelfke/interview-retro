@@ -58,7 +58,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     logger.info("=" * 60)
     logger.info("  Interview Retro — CrewAI + Hugging Face")
-    logger.info(f"  Model: {os.getenv('HUGGINGFACE_MODEL', 'meta-llama/Llama-3.1-8B-Instruct')}")
+    logger.info(
+        f"  Model: {os.getenv('HUGGINGFACE_MODEL', 'huggingface/Qwen/Qwen3.5-35B-A3B')}"
+    )
     logger.info("=" * 60)
 
     state.event_bus = EventBus()
@@ -175,17 +177,57 @@ def _update_analysis(interview_id: str, analysis: dict[str, Any]) -> None:
         interview.strengths       = analysis.get("strengths", [])
         interview.weaknesses      = analysis.get("weaknesses", [])
 
-        for qa in analysis.get("rated_qa", []):
+        raw_rated = analysis.get("rated_qa")
+        rated_qa: list[dict[str, Any]] = []
+        if isinstance(raw_rated, list):
+            raw_rated_list = cast(list[Any], raw_rated)
+            for row in raw_rated_list:
+                if isinstance(row, dict):
+                    rated_qa.append(cast(dict[str, Any], row))
+
+        checkpoints = analysis.get("_checkpoints")
+        raw_extracted: Any = cast(dict[str, Any], checkpoints).get("qa_pairs") if isinstance(checkpoints, dict) else None
+        extracted_qa: list[dict[str, Any]] = []
+        if isinstance(raw_extracted, list):
+            raw_extracted_list = cast(list[Any], raw_extracted)
+            for row in raw_extracted_list:
+                if isinstance(row, dict):
+                    extracted_qa.append(cast(dict[str, Any], row))
+
+        # Fallback: if judge output omits answer/category fields (common),
+        # reuse the extracted Q&A payload so dashboard/API never shows blanks.
+        qa_rows = rated_qa if rated_qa else extracted_qa
+        for idx, qa in enumerate(qa_rows):
+            if not isinstance(qa, dict):
+                continue
+
+            extracted: dict[str, Any] = extracted_qa[idx] if idx < len(extracted_qa) else {}
+            question = str(qa.get("question") or extracted.get("question") or "").strip()
+            answer = str(qa.get("answer") or extracted.get("answer") or "").strip()
+            category = str(qa.get("category") or extracted.get("category") or "general")
+            timestamp_raw = (
+                qa.get("timestamp_seconds")
+                or extracted.get("timestamp_seconds")
+                or extracted.get("timestamp_in_meeting")
+                or extracted.get("timestamp")
+            )
+            timestamp: int | None = None
+            if isinstance(timestamp_raw, (int, float)):
+                timestamp = int(timestamp_raw)
+
+            if not question:
+                continue
+
             db.add(QAPair(
                 id=str(uuid.uuid4()),
                 interview_id=interview_id,
-                question=qa.get("question", ""),
-                answer=qa.get("answer", ""),
+                question=question,
+                answer=answer,
                 score=qa.get("score"),
-                category=qa.get("category", "general"),
+                category=category,
                 feedback=qa.get("feedback"),
                 suggested_answer=qa.get("suggested_answer"),
-                timestamp_in_meeting=qa.get("timestamp_seconds"),
+                timestamp_in_meeting=timestamp,
             ))
 
         db.commit()
@@ -199,7 +241,7 @@ MEETILY_WATCH_DIR = Path.home() / "Movies" / "meetily-recordings"
 async def _meetily_watcher() -> None:
     """
     On startup, scan ~/Movies/meetily-recordings/ for transcripts.json files
-    that have not yet been ingested and queue them for analysis.
+    that have not yet been ingested and store them as pending.
     No continuous folder watching is performed.
     """
     MEETILY_WATCH_DIR.mkdir(parents=True, exist_ok=True)
@@ -217,7 +259,7 @@ async def _meetily_watcher() -> None:
         logger.info(f"Loaded {len(processed)} already-processed transcript path(s) from DB")
 
     # Discover any existing transcript files that were never stored in the DB
-    # and queue them immediately.
+    # and ingest them immediately.
     existing = set(MEETILY_WATCH_DIR.rglob("transcripts.json"))
     unprocessed = existing - processed
     if unprocessed:
@@ -315,8 +357,7 @@ def _meetily_transcript_to_text(segments: list[dict[str, Any]]) -> str:
 
 async def _ingest_meetily_transcript(transcript_path: Path) -> None:
     """
-    Parse a finished transcripts.json and push the recording into the analysis
-    pipeline, creating a Company + Interview record as needed.
+    Parse a finished transcripts.json and persist it as a pending interview.
     """
     try:
         raw = transcript_path.read_text(encoding="utf-8")
@@ -360,10 +401,6 @@ async def _ingest_meetily_transcript(transcript_path: Path) -> None:
     role  = "Software Engineer"
     stage = "Recording"
 
-    if state.event_bus is None:
-        logger.error("Event bus not ready — cannot ingest meetily transcript")
-        return
-
     with Session(engine) as db:
         interview_id = str(uuid.uuid4())
         interview = Interview(
@@ -372,25 +409,14 @@ async def _ingest_meetily_transcript(transcript_path: Path) -> None:
             stage=stage,
             transcript=transcript_text,
             source_path=str(transcript_path),
-            analysis_status="queued",
+            analysis_status="pending",
         )
         db.add(interview)
         db.commit()
 
-    try:
-        state.event_bus.analysis_queue.put_nowait(
-            AnalysisRequested(
-                interview_id=interview_id,
-                transcript=transcript_text,
-                company_name=title,
-                role=role,
-                stage=stage,
-            )
-        )
-        logger.info(f"Queued meetily interview {interview_id} for analysis ({len(transcript_text)} chars)")
-    except asyncio.QueueFull:
-        _mark_analysis_result(interview_id, status="failed", error="Analysis queue full")
-        logger.error("Analysis queue full — meetily transcript was saved but not analyzed")
+    logger.info(
+        f"Ingested meetily interview {interview_id} as pending ({len(transcript_text)} chars)"
+    )
 
 
 # ---- REST API --------------------------------------------------------------
@@ -401,7 +427,7 @@ async def get_status() -> dict[str, Any]:
     queue_depth = state.event_bus.analysis_queue.qsize() if state.event_bus else 0
     return {
         "status": "running",
-        "huggingface_model": os.getenv("HUGGINGFACE_MODEL", "meta-llama/Llama-3.1-8B-Instruct"),
+        "huggingface_model": os.getenv("HUGGINGFACE_MODEL", "huggingface/Qwen/Qwen3.5-35B-A3B"),
         "huggingface_configured": hf_ready,
         "analysis_queue_depth": queue_depth,
         "currently_analyzing": state.currently_analyzing,
@@ -409,7 +435,7 @@ async def get_status() -> dict[str, Any]:
 
 
 def _is_huggingface_ready() -> bool:
-    return bool(os.getenv("HUGGINGFACE_API_KEY"))
+    return bool(os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_API_KEY"))
 
 
 @app.get("/api/interviews")
@@ -492,7 +518,7 @@ async def regrade_qa_pair(interview_id: str, qa_id: str, body: dict[str, Any]) -
         category = qa.category or "general"
 
     if not _is_huggingface_ready():
-        raise HTTPException(503, "HUGGINGFACE_API_KEY is not configured")
+        raise HTTPException(503, "HF_TOKEN is not configured")
 
     regrade_queue = state.event_bus.regrade_queue if state.event_bus else None
     if regrade_queue is None:
@@ -553,7 +579,7 @@ async def get_interview(interview_id: str) -> dict[str, Any]:
 @app.post("/api/interviews")
 async def create_interview(body: dict[str, Any]) -> dict[str, Any]:
     """
-    Create an interview record and queue it for AI analysis.
+    Create an interview record.
 
     Optional fields: role, stage, title, transcript, start_time, end_time, duration_seconds
     """
@@ -572,29 +598,58 @@ async def create_interview(body: dict[str, Any]) -> dict[str, Any]:
             start_time=datetime.fromisoformat(str(body["start_time"])) if body.get("start_time") else None,
             end_time=datetime.fromisoformat(str(body["end_time"])) if body.get("end_time") else None,
             duration_seconds=int(body["duration_seconds"]) if body.get("duration_seconds") is not None else None,
-            analysis_status="queued" if transcript else "pending",
+            analysis_status="pending",
         )
         db.add(interview)
         db.commit()
 
-    if transcript:
-        if state.event_bus is None:
-            raise HTTPException(503, "Event bus not initialized")
-        try:
-            state.event_bus.analysis_queue.put_nowait(
-                AnalysisRequested(
-                    interview_id=interview_id,
-                    transcript=transcript,
-                    company_name=title or stage,
-                    role=role,
-                    stage=stage,
-                )
-            )
-        except asyncio.QueueFull:
-            _mark_analysis_result(interview_id, status="failed", error="Analysis queue full")
-            raise HTTPException(503, "Analysis queue full — try again later")
+    return {"interview_id": interview_id, "analysis_status": "pending"}
 
-    return {"interview_id": interview_id, "analysis_status": "queued" if transcript else "pending"}
+
+@app.post("/api/interviews/{interview_id}/analyze")
+async def trigger_interview_analysis(interview_id: str) -> dict[str, Any]:
+    if not _is_huggingface_ready():
+        raise HTTPException(503, "HF_TOKEN is not configured")
+    if state.event_bus is None:
+        raise HTTPException(503, "Event bus not initialized")
+
+    with Session(engine) as db:
+        interview = db.get(Interview, interview_id)
+        if not interview:
+            raise HTTPException(404, "Not found")
+        transcript = (interview.transcript or "").strip()
+        if not transcript:
+            raise HTTPException(400, "Interview has no transcript to analyze")
+        if interview.analysis_status == "queued":
+            return {"interview_id": interview_id, "analysis_status": "queued"}
+
+        if interview.analysis_status == "complete":
+            raise HTTPException(409, "Interview analysis is already complete")
+
+        interview.analysis_status = "queued"
+        interview.analysis_error = None
+        db.commit()
+
+        title = interview.title or interview.stage or "Interview"
+        role = "Software Engineer"
+        stage = interview.stage or "Interview"
+
+    try:
+        state.event_bus.analysis_queue.put_nowait(
+            AnalysisRequested(
+                interview_id=interview_id,
+                transcript=transcript,
+                company_name=title,
+                role=role,
+                stage=stage,
+            )
+        )
+    except asyncio.QueueFull:
+        _mark_analysis_result(interview_id, status="failed", error="Analysis queue full")
+        raise HTTPException(503, "Analysis queue full — try again later")
+
+    logger.info(f"Queued interview {interview_id} for manual analysis trigger")
+    return {"interview_id": interview_id, "analysis_status": "queued"}
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

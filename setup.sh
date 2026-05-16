@@ -19,22 +19,6 @@ echo -e "\n${BOLD}Installing Python dependencies (crewai, fastapi, db...)${NC}"
 uv sync
 echo -e "${GREEN}✓ Dependencies installed${NC}"
 
-# ── 3. .env setup ──────────────────────────────────────────────────────────
-if [ ! -f .env ]; then
-  if [ -f .env.example ]; then
-    cp .env.example .env
-  else
-    cat > .env << 'EOF'
-CREWAI_TRACING_ENABLED=true
-HUGGINGFACE_MODEL=meta-llama/Llama-3.1-8B-Instruct
-HUGGINGFACE_API_KEY=
-HUGGINGFACE_BASE_URL=https://router.huggingface.co/v1
-EOF
-  fi
-  echo -e "\n${YELLOW}Created .env — set HUGGINGFACE_API_KEY before starting.${NC}"
-else
-  echo -e "${GREEN}✓ .env exists${NC}"
-fi
 
 # ── 4. Local database directory ────────────────────────────────────────────
 mkdir -p "$HOME/.interview-retro"
@@ -42,5 +26,5 @@ echo -e "${GREEN}✓ Local database folder ready at ~/.interview-retro${NC}"
 
 echo -e "\n${BOLD}${GREEN}Setup complete!${NC}\n"
 echo -e "Start the backend:  ${BOLD}uv run python backend/server.py${NC}"
-echo -e "  (CrewAI will call Hugging Face using HUGGINGFACE_API_KEY)"
+echo -e "  (CrewAI will call Hugging Face using HF_TOKEN)"
 echo -e "\nDashboard:          ${BOLD}http://localhost:8765/dashboard${NC}\n"

@@ -152,6 +152,14 @@
     vertical-align: middle; transition: color .15s; margin-left: 2px;
   }
   .delete-btn:hover { color: var(--red); }
+  .analyze-btn {
+    background: var(--accent); border: none; color: #fff; cursor: pointer;
+    font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+    padding: 6px 10px; border-radius: 6px; margin-left: 10px;
+    transition: opacity .15s;
+  }
+  .analyze-btn:hover { opacity: .85; }
+  .analyze-btn:disabled { opacity: .5; cursor: default; }
   .rename-input {
     background: var(--surface2); border: 1px solid var(--accent);
     border-radius: 4px; color: var(--text); font-size: 1.3rem; font-weight: 700;
@@ -650,6 +658,14 @@ function renderInterviewDetail(data) {
          <p style="font-size:.82rem;color:var(--muted);margin-top:8px">${esc(data.analysis_error)}</p>
        </div>` : '';
 
+  const canAnalyze = !!(data.transcript_char_count > 0 && data.analysis_status !== 'queued' && data.analysis_status !== 'complete');
+  const analyzeLabel = data.analysis_status === 'failed' || data.analysis_status === 'skipped'
+    ? 'Retry Analysis'
+    : 'Run Analysis';
+  const analyzeButtonHtml = canAnalyze
+    ? `<button class="analyze-btn" id="analyze-btn-${data.id}" onclick="triggerAnalysis('${data.id}')">${analyzeLabel}</button>`
+    : '';
+
   main.innerHTML = `
     <div class="back-link" onclick="showEmpty()">← Back</div>
     <div class="detail-header">
@@ -662,6 +678,7 @@ function renderInterviewDetail(data) {
       <div style="flex:1;min-width:0">
         <div class="detail-title" style="display:flex;align-items:center;gap:4px">
           <span id="meetingTitleText">${esc(data.title || 'Interview')}</span>
+          ${analyzeButtonHtml}
           <button class="rename-btn" onclick="startRename('${data.id}')" title="Rename meeting">✎</button>
           <button class="delete-btn" onclick="deleteInterview('${data.id}')" title="Delete interview">🗑</button>
         </div>
@@ -765,6 +782,38 @@ async function deleteInterview(interviewId) {
     showEmpty();
   } catch (e) {
     alert('Failed to delete: ' + e.message);
+  }
+}
+
+// ── Trigger interview analysis ───────────────────────────────────────────
+async function triggerAnalysis(interviewId) {
+  const btn = document.getElementById(`analyze-btn-${interviewId}`);
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Queuing...';
+  }
+
+  try {
+    const r = await fetch(`${API}/api/interviews/${interviewId}/analyze`, { method: 'POST' });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || `${r.status} ${r.statusText}`);
+    }
+
+    const meeting = meetings.find(m => m.id === interviewId);
+    if (meeting) {
+      meeting.analysis_status = 'queued';
+      meeting.analysis_error = null;
+      renderMeetingList();
+    }
+    await selectInterview(interviewId);
+    await checkStatus();
+  } catch (e) {
+    alert('Failed to queue analysis: ' + e.message);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Run Analysis';
+    }
   }
 }
 

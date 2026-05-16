@@ -62,7 +62,7 @@ Test new responses
 ## Requirements
 - uv
 - [meetily](https://github.com/Zackriya-Solutions/meetily)
-- Hugging Face API token (`HUGGINGFACE_API_KEY`)
+- Hugging Face API token (`HF_TOKEN`)
 
 ---
 
@@ -81,7 +81,7 @@ The dashboard opens in your browser automatically. Record an interview with meet
 Set your Hugging Face key in `.env` before starting:
 
 ```bash
-HUGGINGFACE_API_KEY=your_token_here
+HF_TOKEN=your_token_here
 ```
 
 ## Storage location
