@@ -12,7 +12,6 @@ This class accepts the transcript and interview metadata at call time,
 interpolates them into the task descriptions, and returns structured JSON.
 """
 import json
-import re
 from pathlib import Path
 from typing import Any
 
@@ -363,93 +362,21 @@ class InterviewAnalysisCrew:
         question: str,
         new_answer: str,
         category: str,
-        company_name: str = "this company",
-        stage: str = "the interview",
-        role: str = "this role",
     ) -> dict[str, Any]:
         """Run a single Q&A pair through the advocate → critic → judge pipeline."""
-        agents = self.agents
-
-        task_present_qa = Task(
-            description=f"""
-            Present the following interview Q&A pair for debate evaluation.
-
-            Return ONLY this JSON:
-            {{
-              "qa_pairs": [
-                {{
-                  "question": {json.dumps(question)},
-                  "answer": {json.dumps(new_answer)},
-                  "category": {json.dumps(category)},
-                  "timestamp_seconds": 0
-                }}
-              ]
-            }}
-            """,
-            agent=agents["qa_extractor"],
-            expected_output="JSON with qa_pairs array containing one entry",
-        )
-
-        task_advocate = Task(
-            description=_TASK_DESCS["advocate_task"].format(
-                company_name=company_name, stage=stage, role=role
-            ),
-            agent=agents["advocate"],
-            expected_output="JSON with advocacy array — one entry per Q&A pair",
-            context=[task_present_qa],
-        )
-
-        task_critic = Task(
-            description=_TASK_DESCS["critic_task"].format(
-                company_name=company_name, stage=stage
-            ),
-            agent=agents["critic"],
-            expected_output="JSON with criticism array — one entry per Q&A pair",
-            context=[task_present_qa, task_advocate],
-        )
-
-        task_judge = Task(
-            description=_TASK_DESCS["judge_task"].format(
-                company_name=company_name, stage=stage, role=role
-            ),
-            agent=agents["judge"],
-            expected_output="JSON with rated_qa, overall_score, strengths, weaknesses, summary",
-            context=[task_present_qa, task_advocate, task_critic],
-        )
-
-        crew = Crew(
-            agents=[agents["qa_extractor"], agents["advocate"], agents["critic"], agents["judge"]],
-            tasks=[task_present_qa, task_advocate, task_critic, task_judge],
-            process=Process.sequential,
-            verbose=True,
-        )
-
-        result = crew.kickoff()
-
-        output_text = str(result).strip()
-        if output_text.startswith("```"):
-            output_text = output_text.split("```")[1]
-            if output_text.startswith("json"):
-                output_text = output_text[4:]
-        output_text = output_text.strip()
-
-        try:
-            parsed = json.loads(output_text)
-        except json.JSONDecodeError:
-            match = re.search(r"\{.*\}", output_text, re.DOTALL)
-            if not match:
-                raise ValueError(f"No JSON found in crew output: {output_text[:200]}")
-            parsed = json.loads(match.group())
-
-        rated = parsed.get("rated_qa", [{}])[0] if parsed.get("rated_qa") else parsed
-        score = float(rated.get("score", 0))
+        qa_pair: dict[str, Any] = {
+            "question": question,
+            "answer": new_answer,
+            "category": category,
+            "timestamp_seconds": 0,
+        }
+        _, _, judge_entry = self._run_pair_debate(qa_pair)
+        score = float(judge_entry.get("score", 0.0))
         score = max(0.0, min(10.0, score))
-        suggested = rated.get("suggested_answer") if score < 7 else None
-
         return {
             "score": score,
-            "feedback": rated.get("feedback", ""),
-            "suggested_answer": suggested,
+            "feedback": judge_entry.get("feedback", ""),
+            "suggested_answer": judge_entry.get("suggested_answer"),
         }
 
 
