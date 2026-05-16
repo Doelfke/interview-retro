@@ -9,12 +9,20 @@ const ANSI_REGEX = /\u001B\[[0-?]*[ -/]*[@-~]/g;
 
 const CHECKS = [
   {
-    title: "Lint",
+    title: "Lint Backend",
     command: "uv run ruff check backend/",
   },
   {
-    title: "Type errors",
+    title: "Backend Type errors",
     command: "uv run pyright backend/",
+  },
+  {
+    title: "Lint Main",
+    command: "uv run ruff check src/",
+  },
+  {
+    title: "Main Type errors",
+    command: "uv run pyright src/",
   },
 ];
 

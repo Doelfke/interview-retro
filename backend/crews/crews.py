@@ -3,16 +3,20 @@ CrewAI Crews
 InterviewAnalysisCrew — processes a transcript through a 5-agent debate pipeline.
 """
 import json
+from pathlib import Path
 from typing import Any
+import yaml
 from crewai import Crew, Task, Process, LLM
 from agents.agents import make_agents
-from interview_retro.crew import (
-    _TRANSCRIPTION_DESC,
-    _QA_EXTRACTION_DESC,
-    _ADVOCATE_DESC,
-    _CRITIC_DESC,
-    _JUDGE_DESC,
-)
+
+_TASKS_YAML = Path(__file__).parent.parent.parent / "src" / "config" / "tasks.yaml"
+
+def _load_task_descs() -> dict[str, str]:
+    with open(_TASKS_YAML) as f:
+        cfg = yaml.safe_load(f)
+    return {key: cfg[key]["description"] for key in cfg}
+
+_TASK_DESCS = _load_task_descs()
 
 
 # ─── Interview Analysis Crew ─────────────────────────────────────────────────
@@ -40,8 +44,9 @@ class InterviewAnalysisCrew:
 
         # ── Task 1: Structure the transcript ──────────────────────────────────
         task_structure = Task(
-            description=_TRANSCRIPTION_DESC.format(
-                company_name=company_name, role=role, stage=stage, transcript=transcript
+            description=(
+                _TASK_DESCS["transcription_task"].format(company_name=company_name)
+                + f"\n\nTranscript:\n{transcript}"
             ),
             agent=agents["transcription"],
             expected_output="JSON with structured_transcript array",
@@ -49,7 +54,7 @@ class InterviewAnalysisCrew:
 
         # ── Task 2: Extract Q&A pairs ─────────────────────────────────────────
         task_extract_qa = Task(
-            description=_QA_EXTRACTION_DESC.format(
+            description=_TASK_DESCS["qa_extraction_task"].format(
                 company_name=company_name, role=role, stage=stage
             ),
             agent=agents["qa_extractor"],
@@ -59,7 +64,7 @@ class InterviewAnalysisCrew:
 
         # ── Task 3: Advocate — argue FOR each answer ──────────────────────────
         task_advocate = Task(
-            description=_ADVOCATE_DESC.format(company_name=company_name, stage=stage, role=role),
+            description=_TASK_DESCS["advocate_task"].format(company_name=company_name, stage=stage, role=role),
             agent=agents["advocate"],
             expected_output="JSON with advocacy array — one entry per Q&A pair",
             context=[task_extract_qa],
@@ -67,7 +72,7 @@ class InterviewAnalysisCrew:
 
         # ── Task 4: Critic — argue AGAINST each answer ────────────────────────
         task_critic = Task(
-            description=_CRITIC_DESC.format(company_name=company_name, stage=stage),
+            description=_TASK_DESCS["critic_task"].format(company_name=company_name, stage=stage),
             agent=agents["critic"],
             expected_output="JSON with criticism array — one entry per Q&A pair",
             context=[task_extract_qa, task_advocate],
@@ -75,7 +80,7 @@ class InterviewAnalysisCrew:
 
         # ── Task 5: Judge — final verdict ─────────────────────────────────────
         task_judge = Task(
-            description=_JUDGE_DESC.format(company_name=company_name, stage=stage, role=role),
+            description=_TASK_DESCS["judge_task"].format(company_name=company_name, stage=stage, role=role),
             agent=agents["judge"],
             expected_output="JSON with rated_qa, overall_score, strengths, weaknesses, summary",
             context=[task_extract_qa, task_advocate, task_critic],
@@ -158,21 +163,21 @@ class InterviewAnalysisCrew:
         )
 
         task_advocate = Task(
-            description=_ADVOCATE_DESC.format(company_name=company_name, stage=stage, role=role),
+            description=_TASK_DESCS["advocate_task"].format(company_name=company_name, stage=stage, role=role),
             agent=agents["advocate"],
             expected_output="JSON with advocacy array — one entry per Q&A pair",
             context=[task_present_qa],
         )
 
         task_critic = Task(
-            description=_CRITIC_DESC.format(company_name=company_name, stage=stage),
+            description=_TASK_DESCS["critic_task"].format(company_name=company_name, stage=stage),
             agent=agents["critic"],
             expected_output="JSON with criticism array — one entry per Q&A pair",
             context=[task_present_qa, task_advocate],
         )
 
         task_judge = Task(
-            description=_JUDGE_DESC.format(company_name=company_name, stage=stage, role=role),
+            description=_TASK_DESCS["judge_task"].format(company_name=company_name, stage=stage, role=role),
             agent=agents["judge"],
             expected_output="JSON with rated_qa, overall_score, strengths, weaknesses, summary",
             context=[task_present_qa, task_advocate, task_critic],

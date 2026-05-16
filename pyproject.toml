@@ -37,7 +37,7 @@ build-backend = "hatchling.build"
 interview_retro = "interview_retro.main:run"
 
 [tool.hatch.build.targets.wheel]
-packages = ["backend", "crew", "src/interview_retro"]
+packages = ["backend", "src/interview_retro"]
 
 [tool.uv]
 # uv automatically selects arm64 wheels for mlx and mlx-lm
