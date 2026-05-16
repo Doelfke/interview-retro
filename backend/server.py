@@ -10,13 +10,17 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import uuid
 import webbrowser
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, cast
+
+# Add src/ so interview_retro package is importable without installation
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import uvicorn
 from dotenv import load_dotenv
@@ -26,7 +30,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from storage.models import Interview, QAPair, engine, init_db
-from crews.crews import InterviewAnalysisCrew
+from interview_retro.events import AnalysisRequested, EventBus, RegradeRequested
 
 load_dotenv()
 
@@ -40,14 +44,13 @@ logger = logging.getLogger(__name__)
 
 # ---- App state -------------------------------------------------------------
 
-ANALYSIS_QUEUE_MAX = 20  # warn if more than this many analyses are pending
-
 
 class AppState:
-    analysis_queue: Optional[asyncio.Queue[tuple[str, str, str, str, str]]] = None
-    analysis_worker_task: Optional[asyncio.Task[None]] = None
-    meetily_watcher_task: Optional[asyncio.Task[None]] = None
-    mlx_server_proc: Optional[asyncio.subprocess.Process] = None
+    event_bus: EventBus | None = None
+    analysis_worker_task: asyncio.Task[None] | None = None
+    regrade_worker_task: asyncio.Task[None] | None = None
+    meetily_watcher_task: asyncio.Task[None] | None = None
+    mlx_server_proc: asyncio.subprocess.Process | None = None
     currently_analyzing: bool = False
 
 
@@ -70,8 +73,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     state.mlx_server_proc = await _start_mlx_server(mlx_model, mlx_host, mlx_port, mlx_ctx)
 
-    state.analysis_queue = asyncio.Queue(maxsize=ANALYSIS_QUEUE_MAX)
-    state.analysis_worker_task = asyncio.create_task(_analysis_worker())
+    state.event_bus = EventBus()
+    state.analysis_worker_task, state.regrade_worker_task = state.event_bus.start_workers(
+        on_start=_on_analysis_start,
+        on_complete=_on_analysis_complete,
+    )
     state.meetily_watcher_task = asyncio.create_task(_meetily_watcher())
 
     host = os.getenv("HOST", "127.0.0.1")
@@ -85,6 +91,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         state.meetily_watcher_task.cancel()
         try:
             await state.meetily_watcher_task
+        except asyncio.CancelledError:
+            pass
+    if state.regrade_worker_task:
+        state.regrade_worker_task.cancel()
+        try:
+            await state.regrade_worker_task
         except asyncio.CancelledError:
             pass
     if state.analysis_worker_task:
@@ -185,60 +197,29 @@ app.add_middleware(
 )
 
 
-# ---- Analysis worker -------------------------------------------------------
+# ---- Analysis event callbacks (no crew code here) -------------------------
 
-async def _analysis_worker() -> None:
-    """Single worker that drains the analysis queue one job at a time."""
-    logger.info("Analysis worker started")
-    analysis_queue = state.analysis_queue
-    if analysis_queue is None:
-        raise RuntimeError("Analysis queue not initialized")
-
-    while True:
-        interview_id, transcript, company_name, role, stage = await analysis_queue.get()
-        state.currently_analyzing = True
-        try:
-            remaining = analysis_queue.qsize()
-            logger.info(f"Starting analysis {interview_id} ({remaining} more in queue)")
-            await _analyze_interview(interview_id, transcript, company_name, role, stage)
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            logger.error(f"Analysis worker error for {interview_id}: {e}", exc_info=True)
-        finally:
-            state.currently_analyzing = False
-            analysis_queue.task_done()
+def _on_analysis_start(interview_id: str, remaining: int) -> None:
+    state.currently_analyzing = True
+    logger.info(f"Starting analysis {interview_id} ({remaining} more in queue)")
 
 
-async def _analyze_interview(
-    interview_id: str, transcript: str, company_name: str, role: str, stage: str
-) -> None:
-    if not transcript or len(transcript) < 100:
-        reason = "Transcript too short to analyze" if transcript else "No transcript provided"
-        logger.warning(f"Skipping analysis for interview {interview_id}: {reason}")
-        await asyncio.to_thread(_mark_analysis_result, interview_id, status="skipped", error=reason)
-        return
-
-    logger.info(f"Starting CrewAI analysis: {company_name} / {stage}")
-    try:
-        crew = InterviewAnalysisCrew()
-        result = await asyncio.to_thread(
-            crew.run,
-            transcript=transcript,
-            company_name=company_name,
-            role=role,
-            stage=stage,
+async def _on_analysis_complete(interview_id: str, result: dict[str, Any]) -> None:
+    state.currently_analyzing = False
+    status = result.get("analysis_status", "complete")
+    if status == "failed":
+        logger.error(f"Analysis failed for {interview_id}: {result.get('analysis_error')}")
+        await asyncio.to_thread(
+            _mark_analysis_result, interview_id, status="failed", error=result.get("analysis_error")
         )
+    elif status == "skipped":
+        logger.warning(f"Analysis skipped for {interview_id}: {result.get('analysis_error')}")
+        await asyncio.to_thread(
+            _mark_analysis_result, interview_id, status="skipped", error=result.get("analysis_error")
+        )
+    else:
+        logger.info(f"Analysis complete for {interview_id} — {result.get('overall_score')}/10")
         await asyncio.to_thread(_update_analysis, interview_id, result)
-        if result.get("analysis_status") == "failed":
-            logger.error(f"Analysis failed for {company_name}: {result.get('analysis_error')}")
-        else:
-            logger.info(
-                f"Analysis complete for {company_name} — {result.get('overall_score')}/10"
-            )
-    except Exception as e:
-        logger.error(f"Analysis failed: {e}", exc_info=True)
-        await asyncio.to_thread(_mark_analysis_result, interview_id, status="failed", error=str(e))
 
 
 def _mark_analysis_result(
@@ -456,9 +437,8 @@ async def _ingest_meetily_transcript(transcript_path: Path) -> None:
     role  = "Software Engineer"
     stage = "Recording"
 
-    analysis_queue = state.analysis_queue
-    if analysis_queue is None:
-        logger.error("Analysis queue not ready — cannot ingest meetily transcript")
+    if state.event_bus is None:
+        logger.error("Event bus not ready — cannot ingest meetily transcript")
         return
 
     with Session(engine) as db:
@@ -475,8 +455,14 @@ async def _ingest_meetily_transcript(transcript_path: Path) -> None:
         db.commit()
 
     try:
-        analysis_queue.put_nowait(
-            (interview_id, transcript_text, title, role, stage)
+        state.event_bus.analysis_queue.put_nowait(
+            AnalysisRequested(
+                interview_id=interview_id,
+                transcript=transcript_text,
+                company_name=title,
+                role=role,
+                stage=stage,
+            )
         )
         logger.info(f"Queued meetily interview {interview_id} for analysis ({len(transcript_text)} chars)")
     except asyncio.QueueFull:
@@ -489,7 +475,7 @@ async def _ingest_meetily_transcript(transcript_path: Path) -> None:
 @app.get("/status")
 async def get_status() -> dict[str, Any]:
     mlx_ok = await _check_mlx_server()
-    queue_depth = state.analysis_queue.qsize() if state.analysis_queue else 0
+    queue_depth = state.event_bus.analysis_queue.qsize() if state.event_bus else 0
     return {
         "status": "running",
         "mlx_model": os.getenv("MLX_MODEL", "mlx-community/Qwen2.5-32B-Instruct-4bit"),
@@ -575,16 +561,6 @@ async def delete_qa_pair(interview_id: str, qa_id: str) -> dict[str, Any]:
     return {"ok": True, "overall_score": new_score, "potential_overall_score": potential_overall, "has_potential_scores": has_potential}
 
 
-def _regrade_answer_sync(question: str, new_answer: str, category: str) -> dict[str, Any]:
-    """
-    Grade a single interview answer using the same advocate → critic → judge
-    crew pipeline used for full interview analysis.
-    Returns score, feedback, and optional suggested_answer.
-    """
-    crew = InterviewAnalysisCrew()
-    return crew.regrade_answer(question=question, new_answer=new_answer, category=category)
-
-
 @app.post("/api/interviews/{interview_id}/qa/{qa_id}/regrade")
 async def regrade_qa_pair(interview_id: str, qa_id: str, body: dict[str, Any]) -> dict[str, Any]:
     new_answer = str(body.get("new_answer") or "").strip()
@@ -604,8 +580,15 @@ async def regrade_qa_pair(interview_id: str, qa_id: str, body: dict[str, Any]) -
     if not mlx_ok:
         raise HTTPException(503, "AI server is not available — please wait for it to finish loading")
 
+    regrade_queue = state.event_bus.regrade_queue if state.event_bus else None
+    if regrade_queue is None:
+        raise HTTPException(503, "Regrade queue not initialized")
+
+    future: asyncio.Future[dict[str, Any]] = asyncio.get_event_loop().create_future()
+    await regrade_queue.put(RegradeRequested(question=question, new_answer=new_answer, category=category, future=future))
+
     try:
-        result = await asyncio.to_thread(_regrade_answer_sync, question, new_answer, category)
+        result = await future
     except Exception as e:
         logger.error(f"Regrade failed for qa {qa_id}: {e}", exc_info=True)
         raise HTTPException(500, f"Grading failed: {e}")
@@ -681,11 +664,18 @@ async def create_interview(body: dict[str, Any]) -> dict[str, Any]:
         db.commit()
 
     if transcript:
-        analysis_queue = state.analysis_queue
-        if analysis_queue is None:
-            raise HTTPException(503, "Analysis queue not initialized")
+        if state.event_bus is None:
+            raise HTTPException(503, "Event bus not initialized")
         try:
-            analysis_queue.put_nowait((interview_id, transcript, title or stage, role, stage))
+            state.event_bus.analysis_queue.put_nowait(
+                AnalysisRequested(
+                    interview_id=interview_id,
+                    transcript=transcript,
+                    company_name=title or stage,
+                    role=role,
+                    stage=stage,
+                )
+            )
         except asyncio.QueueFull:
             _mark_analysis_result(interview_id, status="failed", error="Analysis queue full")
             raise HTTPException(503, "Analysis queue full — try again later")

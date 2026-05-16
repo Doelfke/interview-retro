@@ -34,7 +34,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-interview_retro = "interview_retro.main:run"
+interview_retro = "interview_retro.main:kickoff"
+kickoff = "interview_retro.main:kickoff"
+plot = "interview_retro.main:plot"
 
 [tool.hatch.build.targets.wheel]
 packages = ["backend", "src/interview_retro"]
@@ -55,6 +57,7 @@ url = "https://pypi.org/simple"
 dev = [
     "ruff>=0.15.13",
     "pyright>=1.1.0",
+    "pytest>=8.0.0",
 ]
 
 [tool.ruff]
