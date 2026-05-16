@@ -437,6 +437,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/b0/db/8b6a5026bb038e538c59b643ecd940e731ed3e4c3769fdc54d803ce6b5a1/crewai-1.13.0-py3-none-any.whl", hash = "sha256:6de1241960c18f5ae984005763b0311a1e11224d59830e42020d12ebf0665b5f", size = 1021512, upload-time = "2026-04-02T23:17:02.666Z" },
 ]
 
+[package.optional-dependencies]
+tools = [
+    { name = "crewai-tools" },
+]
+
 [[package]]
 name = "crewai-tools"
 version = "1.13.0"
@@ -907,7 +912,7 @@ source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
     { name = "alembic" },
-    { name = "crewai" },
+    { name = "crewai", extra = ["tools"] },
     { name = "crewai-tools" },
     { name = "fastapi" },
     { name = "httpx" },
@@ -933,7 +938,7 @@ dev = [
 requires-dist = [
     { name = "aiofiles", specifier = ">=24.1.0" },
     { name = "alembic", specifier = ">=1.13.3" },
-    { name = "crewai", specifier = ">=0.80.0" },
+    { name = "crewai", extras = ["tools"], specifier = ">=0.80.0" },
     { name = "crewai-tools", specifier = ">=0.17.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.27.2" },

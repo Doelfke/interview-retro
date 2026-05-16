@@ -9,22 +9,18 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     "python-multipart>=0.0.9",
     "aiofiles>=24.1.0",
-
     # ── MLX — Apple's native ML framework for Apple Silicon ────────────────
     # mlx-lm: LLM inference directly on Metal (no llama.cpp, no Ollama)
     # Ships mlx_lm.server — an OpenAI-compatible endpoint CrewAI talks to
     "mlx>=0.18.0",
     "mlx-lm>=0.18.0",
-
     # ── CrewAI — uses LiteLLM to talk to the mlx_lm.server endpoint ────────
-    "crewai>=0.80.0",
+    "crewai[tools]>=0.80.0",
     "crewai-tools>=0.17.0",
     "litellm>=1.51.0",
-
     # ── Database ───────────────────────────────────────────────────────────
     "sqlalchemy>=2.0.35",
     "alembic>=1.13.3",
-
     # ── Utilities ──────────────────────────────────────────────────────────
     "pydantic>=2.9.0",
     "python-dotenv>=1.0.1",
