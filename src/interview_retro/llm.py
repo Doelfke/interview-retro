@@ -1,10 +1,11 @@
 """
 LLM factory for the interview_retro CrewAI package.
 
-Routes to the local mlx_lm.server instance (OpenAI-compatible, Metal/MLX).
+Routes CrewAI to Hugging Face Inference via LiteLLM.
 Configure via environment variables:
-  MLX_SERVER_URL  — defaults to http://localhost:8081/v1
-  MLX_MODEL       — defaults to mlx-community/Qwen2.5-32B-Instruct-4bit
+  HUGGINGFACE_MODEL    — defaults to meta-llama/Llama-3.1-8B-Instruct
+  HUGGINGFACE_API_KEY  — required for hosted inference
+  HUGGINGFACE_BASE_URL — optional, defaults to https://router.huggingface.co/v1
 """
 import os
 
@@ -12,14 +13,20 @@ from crewai import LLM
 
 
 def make_llm() -> LLM:
-    """Build a CrewAI LLM that routes to the local mlx_lm.server instance."""
-    base_url = os.getenv("MLX_SERVER_URL", "http://localhost:8081/v1")
-    mlx_model = os.getenv("MLX_MODEL", "mlx-community/Qwen2.5-32B-Instruct-4bit")
+    """Build a CrewAI LLM that routes to Hugging Face hosted inference."""
+    model = os.getenv("HUGGINGFACE_MODEL", "meta-llama/Llama-3.1-8B-Instruct")
+    api_key = os.getenv("HUGGINGFACE_API_KEY")
+    base_url = os.getenv("HUGGINGFACE_BASE_URL", "https://router.huggingface.co/v1")
+
+    if not api_key:
+        raise RuntimeError(
+            "HUGGINGFACE_API_KEY is required. Set it in your environment or .env file."
+        )
 
     return LLM(
-        model=f"openai/{mlx_model}",  # LiteLLM openai/ prefix + model name the server loaded
+        model=f"huggingface/{model}",
         base_url=base_url,
-        api_key="not-required",       # required by LiteLLM; mlx_lm.server ignores it
+        api_key=api_key,
         temperature=0.1,
         timeout=300,
     )

@@ -1,11 +1,11 @@
 # 🎙 Interview Retro for meetily, by [JoBound](https://jobound.io)
 
-Turn your meetily interview recordings into actionable coaching — **100% local on your Mac**.
-No cloud APIs. No audio, transcript, or score ever leaves your machine.
+Turn your meetily interview recordings into actionable coaching with CrewAI.
+The app runs locally and uses Hugging Face for model inference.
 
 | Component | Technology | RAM |
 |-----------|-----------|-----|
-| LLM (CrewAI) | mlx-lm — `Qwen2.5-32B-Instruct-4bit` | ~18 GB unified |
+| LLM (CrewAI) | Hugging Face Inference API | — |
 | Storage | SQLite → iCloud Drive | — |
 
 ---
@@ -42,7 +42,7 @@ Changed your mind about a question? Hit regrade on any individual Q&A pair and t
 The dashboard launches in your browser the moment the server starts. View all past interviews, drill into per-question breakdowns, and track your scores over time — no separate install needed.
 
 ### Queue-based async processing
-Multiple interviews are handled in a background queue so the dashboard stays responsive while analyses run. A single worker processes one interview at a time to avoid saturating the MLX server.
+Multiple interviews are handled in a background queue so the dashboard stays responsive while analyses run. A single worker processes one interview at a time for predictable throughput.
 
 ### iCloud Drive storage
 The SQLite database lives in iCloud Drive and syncs automatically to every Apple device on your account. Browse or query it directly with [DB Browser for SQLite](https://sqlitebrowser.org) (free).
@@ -62,7 +62,7 @@ Test new responses
 ## Requirements
 - uv
 - [meetily](https://github.com/Zackriya-Solutions/meetily)
-- **Apple Silicon Mac** (M-series)
+- Hugging Face API token (`HUGGINGFACE_API_KEY`)
 
 ---
 
@@ -78,6 +78,12 @@ uv run python backend/server.py
 
 The dashboard opens in your browser automatically. Record an interview with meetily and the analysis will appear on its own.
 
+Set your Hugging Face key in `.env` before starting:
+
+```bash
+HUGGINGFACE_API_KEY=your_token_here
+```
+
 ## Storage location
 
 ```
@@ -90,6 +96,6 @@ Auto-syncs to all Apple devices via iCloud Drive.
 
 ## Privacy
 
-- ✅ LLM inference on-device via mlx-lm + Metal
+- ✅ Audio/transcripts are processed by your local app and sent to Hugging Face only for model inference
 - ✅ Data stored in iCloud Drive (Apple-encrypted at rest)
 - ✅ No telemetry, no accounts, no subscriptions

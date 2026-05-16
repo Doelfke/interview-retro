@@ -1,10 +1,6 @@
 """
 Interview Retro Backend
-FastAPI server. All AI runs locally via MLX (mlx-lm).
-
-On startup the lifespan manager launches mlx_lm.server as a subprocess,
-exposes an OpenAI-compatible endpoint on localhost:8081, and shuts it down
-cleanly when the backend exits.
+FastAPI server. AI analysis is orchestrated by CrewAI.
 """
 import asyncio
 import json
@@ -50,7 +46,6 @@ class AppState:
     analysis_worker_task: asyncio.Task[None] | None = None
     regrade_worker_task: asyncio.Task[None] | None = None
     meetily_watcher_task: asyncio.Task[None] | None = None
-    mlx_server_proc: asyncio.subprocess.Process | None = None
     currently_analyzing: bool = False
 
 
@@ -61,17 +56,10 @@ state = AppState()
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_db()
 
-    mlx_model = os.getenv("MLX_MODEL", "mlx-community/Qwen2.5-32B-Instruct-4bit")
-    mlx_port  = int(os.getenv("MLX_SERVER_PORT", "8081"))
-    mlx_host  = os.getenv("MLX_SERVER_HOST", "127.0.0.1")
-    mlx_ctx   = int(os.getenv("MLX_CONTEXT_LENGTH", "8192"))
-
     logger.info("=" * 60)
-    logger.info("  Interview Retro — fully local via Apple MLX")
-    logger.info(f"  LLM : {mlx_model}")
+    logger.info("  Interview Retro — CrewAI + Hugging Face")
+    logger.info(f"  Model: {os.getenv('HUGGINGFACE_MODEL', 'meta-llama/Llama-3.1-8B-Instruct')}")
     logger.info("=" * 60)
-
-    state.mlx_server_proc = await _start_mlx_server(mlx_model, mlx_host, mlx_port, mlx_ctx)
 
     state.event_bus = EventBus()
     state.analysis_worker_task, state.regrade_worker_task = state.event_bus.start_workers(
@@ -105,13 +93,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await state.analysis_worker_task
         except asyncio.CancelledError:
             pass
-    if state.mlx_server_proc:
-        logger.info("Stopping mlx_lm.server...")
-        state.mlx_server_proc.terminate()
-        try:
-            await asyncio.wait_for(state.mlx_server_proc.wait(), timeout=5)
-        except asyncio.TimeoutError:
-            state.mlx_server_proc.kill()
 
 
 async def _open_dashboard(host: str, port: int) -> None:
@@ -127,64 +108,6 @@ async def _open_dashboard(host: str, port: int) -> None:
     url = f"http://{host}:{port}/dashboard"
     logger.info(f"Opening dashboard at {url}")
     webbrowser.open(url)
-
-
-async def _start_mlx_server(
-    model: str, host: str, port: int, ctx: int
-) -> asyncio.subprocess.Process:
-    """
-    Launch mlx_lm.server as a subprocess and wait until it is accepting
-    connections before returning.
-    """
-    import sys
-    import httpx
-
-    cmd = [
-        sys.executable, "-m", "mlx_lm.server",
-        "--model",      model,
-        "--host",       host,
-        "--port",       str(port),
-        "--max-tokens", str(ctx),
-    ]
-    logger.info(f"Starting mlx_lm.server: {' '.join(cmd)}")
-
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-    )
-
-    asyncio.create_task(_log_subprocess(proc, "mlx_lm.server"))
-
-    # Wait up to 600 s — a cold first run can download ~18 GB
-    url = f"http://{host}:{port}/v1/models"
-    for attempt in range(600):
-        await asyncio.sleep(1)
-        if proc.returncode is not None:
-            raise RuntimeError(
-                f"mlx_lm.server exited unexpectedly (code {proc.returncode}). "
-                "Check that the MLX_MODEL path is correct."
-            )
-        try:
-            async with httpx.AsyncClient(timeout=1) as c:
-                r = await c.get(url)
-                if r.status_code == 200:
-                    logger.info(f"mlx_lm.server ready on {host}:{port} after {attempt + 1}s")
-                    return proc
-        except Exception:
-            pass
-
-    raise TimeoutError("mlx_lm.server did not become ready within 600 s — check logs")
-
-
-async def _log_subprocess(proc: asyncio.subprocess.Process, name: str) -> None:
-    if proc.stdout is None:
-        return
-    while True:
-        line = await proc.stdout.readline()
-        if not line:
-            break
-        logger.debug(f"[{name}] {line.decode(errors='replace').rstrip()}")
 
 
 app = FastAPI(title="Interview Retro (local)", lifespan=lifespan)
@@ -474,27 +397,19 @@ async def _ingest_meetily_transcript(transcript_path: Path) -> None:
 
 @app.get("/status")
 async def get_status() -> dict[str, Any]:
-    mlx_ok = await _check_mlx_server()
+    hf_ready = _is_huggingface_ready()
     queue_depth = state.event_bus.analysis_queue.qsize() if state.event_bus else 0
     return {
         "status": "running",
-        "mlx_model": os.getenv("MLX_MODEL", "mlx-community/Qwen2.5-32B-Instruct-4bit"),
-        "mlx_server_ok": mlx_ok,
+        "huggingface_model": os.getenv("HUGGINGFACE_MODEL", "meta-llama/Llama-3.1-8B-Instruct"),
+        "huggingface_configured": hf_ready,
         "analysis_queue_depth": queue_depth,
         "currently_analyzing": state.currently_analyzing,
     }
 
 
-async def _check_mlx_server() -> bool:
-    import httpx
-    port = os.getenv("MLX_SERVER_PORT", "8081")
-    host = os.getenv("MLX_SERVER_HOST", "127.0.0.1")
-    try:
-        async with httpx.AsyncClient(timeout=2) as c:
-            r = await c.get(f"http://{host}:{port}/v1/models")
-            return r.status_code == 200
-    except Exception:
-        return False
+def _is_huggingface_ready() -> bool:
+    return bool(os.getenv("HUGGINGFACE_API_KEY"))
 
 
 @app.get("/api/interviews")
@@ -576,9 +491,8 @@ async def regrade_qa_pair(interview_id: str, qa_id: str, body: dict[str, Any]) -
         question = qa.question
         category = qa.category or "general"
 
-    mlx_ok = await _check_mlx_server()
-    if not mlx_ok:
-        raise HTTPException(503, "AI server is not available — please wait for it to finish loading")
+    if not _is_huggingface_ready():
+        raise HTTPException(503, "HUGGINGFACE_API_KEY is not configured")
 
     regrade_queue = state.event_bus.regrade_queue if state.event_bus else None
     if regrade_queue is None:

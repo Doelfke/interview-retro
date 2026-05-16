@@ -1,7 +1,7 @@
 [project]
 name = "interview-retro"
 version = "1.0.0"
-description = "AI-powered interview analysis — fully local on Apple Silicon via MLX"
+description = "AI-powered interview analysis with CrewAI + Hugging Face"
 requires-python = ">=3.11"
 dependencies = [
     # ── Web server ─────────────────────────────────────────────────────────
@@ -9,12 +9,7 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     "python-multipart>=0.0.9",
     "aiofiles>=24.1.0",
-    # ── MLX — Apple's native ML framework for Apple Silicon ────────────────
-    # mlx-lm: LLM inference directly on Metal (no llama.cpp, no Ollama)
-    # Ships mlx_lm.server — an OpenAI-compatible endpoint CrewAI talks to
-    "mlx>=0.18.0",
-    "mlx-lm>=0.18.0",
-    # ── CrewAI — uses LiteLLM to talk to the mlx_lm.server endpoint ────────
+    # ── CrewAI + LiteLLM ────────────────────────────────────────────────────
     "crewai[tools]>=0.80.0",
     "crewai-tools>=0.17.0",
     "litellm>=1.51.0",
@@ -42,7 +37,6 @@ plot = "interview_retro.main:plot"
 packages = ["backend", "src/interview_retro"]
 
 [tool.uv]
-# uv automatically selects arm64 wheels for mlx and mlx-lm
 # tiktoken 0.8.0 uses pyo3 0.22 which doesn't support Python 3.14; override to 0.13.0+
 override-dependencies = [
     "tiktoken>=0.13.0",

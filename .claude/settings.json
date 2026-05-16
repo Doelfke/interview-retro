@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Skill(superpowers:writing-plans)",
-      "Skill(superpowers:writing-plans:*)"
+      "Skill(superpowers:writing-plans:*)",
+      "Bash(uv sync *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(python -m pytest*)",
+      "Bash(python -m ruff check *)",
+      "Bash(python -m pyright *)"
     ]
   }
 }
