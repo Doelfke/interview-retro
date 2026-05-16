@@ -1,12 +1,12 @@
 # 🎙 Interview Retro for meetily, by [JoBound](https://jobound.io)
 
 Turn your meetily interview recordings into actionable coaching with CrewAI.
-The app runs locally and uses Hugging Face for model inference.
+Runs locally against a local ollama model, or via Hugging Face when deployed through CrewAI Enterprise.
 
-| Component | Technology | RAM |
-|-----------|-----------|-----|
-| LLM (CrewAI) | Hugging Face Inference API | — |
-| Storage | SQLite → iCloud Drive | — |
+| Component | Local mode | Hosted mode |
+|-----------|-----------|-------------|
+| LLM (CrewAI) | ollama via ollama-bridge | Hugging Face Inference API |
+| Storage | SQLite → iCloud Drive | SQLite → iCloud Drive |
 
 ---
 
@@ -62,7 +62,7 @@ Test new responses
 ## Requirements
 - uv
 - [meetily](https://github.com/Zackriya-Solutions/meetily)
-- Hugging Face API token (`HF_TOKEN`)
+- [ollama](https://ollama.com) (local mode) **or** a Hugging Face API token — see setup below
 
 ---
 
@@ -78,10 +78,14 @@ uv run python backend/server.py
 
 The dashboard opens in your browser automatically. Record an interview with meetily and the analysis will appear on its own.
 
-Set your Hugging Face key in `.env` before starting:
+
+Run the ollama-bridge proxy so CrewAI can reach your local ollama server:
 
 ```bash
-HF_TOKEN=your_token_here
+# In a separate terminal
+'ollama pull gpt-oss:20b'
+cd ollama-bridge
+uv run python server.py
 ```
 
 ## Storage location
@@ -96,6 +100,6 @@ Auto-syncs to all Apple devices via iCloud Drive.
 
 ## Privacy
 
-- ✅ Audio/transcripts are processed by your local app and sent to Hugging Face only for model inference
+- ✅ In local mode, transcripts never leave your machine — inference runs entirely in ollama
 - ✅ Data stored in iCloud Drive (Apple-encrypted at rest)
 - ✅ No telemetry, no accounts, no subscriptions

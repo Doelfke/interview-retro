@@ -57,10 +57,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_db()
 
     logger.info("=" * 60)
-    logger.info("  Interview Retro — CrewAI + Hugging Face")
-    logger.info(
-        f"  Model: {os.getenv('HUGGINGFACE_MODEL', 'huggingface/Qwen/Qwen3.5-35B-A3B')}"
-    )
+    logger.info("  Interview Retro — CrewAI")
+    if os.getenv("OPENAI_API_KEY"):
+        logger.info(f"  Mode:  local (OpenAI-compatible)")
+        logger.info(f"  Model: {os.getenv('OPENAI_MODEL', '(OPENAI_MODEL not set)')}")
+        logger.info(f"  URL:   {os.getenv('OPENAI_BASE_URL', '(OPENAI_BASE_URL not set)')}")
+    else:
+        logger.info(f"  Mode:  hosted (Hugging Face)")
+        logger.info(f"  Model: {os.getenv('HUGGINGFACE_MODEL', 'huggingface/gpt-oss:20b')}")
     logger.info("=" * 60)
 
     state.event_bus = EventBus()
@@ -423,19 +427,30 @@ async def _ingest_meetily_transcript(transcript_path: Path) -> None:
 
 @app.get("/status")
 async def get_status() -> dict[str, Any]:
-    hf_ready = _is_huggingface_ready()
+    llm_ready = _is_llm_ready()
     queue_depth = state.event_bus.analysis_queue.qsize() if state.event_bus else 0
+    if os.getenv("OPENAI_API_KEY"):
+        mode = "local"
+        model = os.getenv("OPENAI_MODEL", "gpt-oss:20b")
+    else:
+        mode = "hosted"
+        model = os.getenv("HUGGINGFACE_MODEL", "huggingface/gpt-oss:20b")
     return {
         "status": "running",
-        "huggingface_model": os.getenv("HUGGINGFACE_MODEL", "huggingface/Qwen/Qwen3.5-35B-A3B"),
-        "huggingface_configured": hf_ready,
+        "llm_mode": mode,
+        "model": model,
+        "llm_configured": llm_ready,
         "analysis_queue_depth": queue_depth,
         "currently_analyzing": state.currently_analyzing,
     }
 
 
-def _is_huggingface_ready() -> bool:
-    return bool(os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_API_KEY"))
+def _is_llm_ready() -> bool:
+    return bool(
+        os.getenv("OPENAI_API_KEY")
+        or os.getenv("HF_TOKEN")
+        or os.getenv("HUGGINGFACE_API_KEY")
+    )
 
 
 @app.get("/api/interviews")
@@ -517,8 +532,8 @@ async def regrade_qa_pair(interview_id: str, qa_id: str, body: dict[str, Any]) -
         question = qa.question
         category = qa.category or "general"
 
-    if not _is_huggingface_ready():
-        raise HTTPException(503, "HF_TOKEN is not configured")
+    if not _is_llm_ready():
+        raise HTTPException(503, "No LLM configured — set OPENAI_API_KEY (local) or HF_TOKEN (hosted)")
 
     regrade_queue = state.event_bus.regrade_queue if state.event_bus else None
     if regrade_queue is None:
@@ -608,8 +623,8 @@ async def create_interview(body: dict[str, Any]) -> dict[str, Any]:
 
 @app.post("/api/interviews/{interview_id}/analyze")
 async def trigger_interview_analysis(interview_id: str) -> dict[str, Any]:
-    if not _is_huggingface_ready():
-        raise HTTPException(503, "HF_TOKEN is not configured")
+    if not _is_llm_ready():
+        raise HTTPException(503, "No LLM configured — set OPENAI_API_KEY (local) or HF_TOKEN (hosted)")
     if state.event_bus is None:
         raise HTTPException(503, "Event bus not initialized")
 
