@@ -19,8 +19,8 @@ from crewai.project import CrewBase, agent, crew, task
 class InterviewRetroCrew:
     """Interview retrospective analysis crew."""
 
-    agents_config: dict[str, Any] = "interview_retro/config/agents.yaml"  # type: ignore[assignment]
-    tasks_config: dict[str, Any] = "interview_retro/config/tasks.yaml"  # type: ignore[assignment]
+    agents_config: dict[str, Any] = "config/agents.yaml"  # type: ignore[assignment]
+    tasks_config: dict[str, Any] = "config/tasks.yaml"  # type: ignore[assignment]
 
     @agent
     def transcription_agent(self) -> Agent:

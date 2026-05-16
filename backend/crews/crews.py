@@ -9,7 +9,7 @@ import yaml
 from crewai import Crew, Task, Process, LLM
 from agents.agents import make_agents
 
-_TASKS_YAML = Path(__file__).parent.parent.parent / "src" / "interview_retro" / "config" / "tasks.yaml"
+_TASKS_YAML = Path(__file__).parent.parent.parent / "src" / "config" / "tasks.yaml"
 
 def _load_task_descs() -> dict[str, str]:
     with open(_TASKS_YAML) as f:

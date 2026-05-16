@@ -2,7 +2,7 @@
 name = "interview-retro"
 version = "1.0.0"
 description = "AI-powered interview analysis — fully local on Apple Silicon via MLX"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
 dependencies = [
     # ── Web server ─────────────────────────────────────────────────────────
     "fastapi>=0.115.0",
