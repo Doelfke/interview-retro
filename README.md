@@ -1,11 +1,11 @@
 # 🎙 Interview Retro for meetily, by [JoBound](https://jobound.io)
 
 Turn your meetily interview recordings into actionable coaching with CrewAI.
-Runs locally against a local ollama model, or via Hugging Face when deployed through CrewAI Enterprise.
+Runs locally against a local ollama model, or via OpenRouter when deployed through CrewAI Enterprise.
 
 | Component | Local mode | Hosted mode |
 |-----------|-----------|-------------|
-| LLM (CrewAI) | ollama via ollama-bridge | Hugging Face Inference API |
+| LLM (CrewAI) | ollama via ollama-bridge | OpenRouter Inference API |
 | Storage | SQLite → iCloud Drive | SQLite → iCloud Drive |
 
 ---
@@ -62,7 +62,7 @@ Test new responses
 ## Requirements
 - uv
 - [meetily](https://github.com/Zackriya-Solutions/meetily)
-- [ollama](https://ollama.com) (local mode) **or** a Hugging Face API token — see setup below
+- [ollama](https://ollama.com)
 
 ---
 

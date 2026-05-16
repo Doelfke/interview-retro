@@ -1,7 +1,7 @@
 [project]
 name = "interview-retro"
 version = "1.0.0"
-description = "AI-powered interview analysis with CrewAI + Hugging Face"
+description = "AI-powered interview analysis with CrewAI + OpenRouter"
 requires-python = ">=3.11"
 dependencies = [
     # ── Web server ─────────────────────────────────────────────────────────
@@ -32,6 +32,9 @@ build-backend = "hatchling.build"
 interview_retro = "interview_retro.main:kickoff"
 kickoff = "interview_retro.main:kickoff"
 plot = "interview_retro.main:plot"
+
+[tool.crewai]
+type = "flow"
 
 [tool.hatch.build.targets.wheel]
 packages = ["backend", "src/interview_retro"]

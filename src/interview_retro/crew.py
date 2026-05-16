@@ -25,8 +25,8 @@ from interview_retro.llm import make_llm
 class InterviewRetroCrew:
     """Transcript cleaning and Q&A extraction crew."""
 
-    agents_config: dict[str, Any] = "config/agents.yaml"  # type: ignore[assignment]
-    tasks_config: dict[str, Any] = "config/tasks.yaml"  # type: ignore[assignment]
+    agents_config: dict[str, Any] = "config/extraction_agents.yaml"  # type: ignore[assignment]
+    tasks_config: dict[str, Any] = "config/extraction_tasks.yaml"  # type: ignore[assignment]
 
     @agent
     def transcription_agent(self) -> Agent:
@@ -61,8 +61,8 @@ class QADebateCrew:
     Run this crew once per Q&A pair extracted by InterviewRetroCrew.
     """
 
-    agents_config: dict[str, Any] = "config/agents.yaml"  # type: ignore[assignment]
-    tasks_config: dict[str, Any] = "config/tasks.yaml"  # type: ignore[assignment]
+    agents_config: dict[str, Any] = "config/debate_agents.yaml"  # type: ignore[assignment]
+    tasks_config: dict[str, Any] = "config/debate_tasks.yaml"  # type: ignore[assignment]
 
     @agent
     def advocate_agent(self) -> Agent:

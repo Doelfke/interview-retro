@@ -63,8 +63,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info(f"  Model: {os.getenv('OPENAI_MODEL', '(OPENAI_MODEL not set)')}")
         logger.info(f"  URL:   {os.getenv('OPENAI_BASE_URL', '(OPENAI_BASE_URL not set)')}")
     else:
-        logger.info(f"  Mode:  hosted (Hugging Face)")
-        logger.info(f"  Model: {os.getenv('HUGGINGFACE_MODEL', 'huggingface/gpt-oss:20b')}")
+        logger.info(f"  Mode:  hosted (OpenRouter)")
+        logger.info(f"  Model: {os.getenv('OPENROUTER_MODEL', 'gpt-oss:20b')}")
     logger.info("=" * 60)
 
     state.event_bus = EventBus()
@@ -434,7 +434,7 @@ async def get_status() -> dict[str, Any]:
         model = os.getenv("OPENAI_MODEL", "gpt-oss:20b")
     else:
         mode = "hosted"
-        model = os.getenv("HUGGINGFACE_MODEL", "huggingface/gpt-oss:20b")
+        model = os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-20b:free")
     return {
         "status": "running",
         "llm_mode": mode,
@@ -448,8 +448,7 @@ async def get_status() -> dict[str, Any]:
 def _is_llm_ready() -> bool:
     return bool(
         os.getenv("OPENAI_API_KEY")
-        or os.getenv("HF_TOKEN")
-        or os.getenv("HUGGINGFACE_API_KEY")
+        or os.getenv("OPENROUTER_API_KEY")
     )
 
 
@@ -533,7 +532,7 @@ async def regrade_qa_pair(interview_id: str, qa_id: str, body: dict[str, Any]) -
         category = qa.category or "general"
 
     if not _is_llm_ready():
-        raise HTTPException(503, "No LLM configured — set OPENAI_API_KEY (local) or HF_TOKEN (hosted)")
+        raise HTTPException(503, "No LLM configured — set OPENAI_API_KEY (local) or OPENROUTER_API_KEY (hosted)")
 
     regrade_queue = state.event_bus.regrade_queue if state.event_bus else None
     if regrade_queue is None:

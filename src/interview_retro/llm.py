@@ -6,11 +6,9 @@ When running locally, routes to an OpenAI-compatible endpoint (e.g. ollama-bridg
   OPENAI_BASE_URL  — required in local mode (e.g. http://127.0.0.1:4011/v1)
   OPENAI_MODEL     — required in local mode (e.g. llama3.2)
 
-When running via CrewAI Enterprise / hosted, routes to Hugging Face Inference:
-  HF_TOKEN             — required for hosted inference
-  HUGGINGFACE_API_KEY  — optional backward-compatible fallback
-  HUGGINGFACE_MODEL    
-  HUGGINGFACE_BASE_URL — optional, defaults to https://router.huggingface.co/v1
+When running via CrewAI Enterprise / hosted, routes to OpenRouter:
+  OPENROUTER_API_KEY — required for OpenRouter inference
+  OPENROUTER_MODEL   — optional, defaults to openai/gpt-oss-20b:free
 """
 import os
 
@@ -23,12 +21,13 @@ def make_llm() -> LLM:
 
     Local mode  (OPENAI_API_KEY set): routes to an OpenAI-compatible endpoint
                                       such as the ollama-bridge proxy.
-    Online mode (HF_TOKEN set):       routes to Hugging Face hosted inference,
-                                      used when running inside CrewAI Enterprise.
+    Online mode (OPENROUTER_API_KEY set): routes to OpenRouter,
+                                          used when running inside CrewAI Enterprise.
     """
-    if os.getenv("OPENAI_API_KEY"):
-        return _make_openai_llm()
-    return _make_huggingface_llm()
+    if os.getenv("OPENROUTER_API_KEY"):
+        return _make_openrouter_llm()
+    return _make_openai_llm()
+
 
 
 def _make_openai_llm() -> LLM:
@@ -55,22 +54,21 @@ def _make_openai_llm() -> LLM:
         )
 
 
-def _make_huggingface_llm() -> LLM:
-    """Online mode — Hugging Face hosted inference (CrewAI Enterprise)."""
-    model = os.getenv("HUGGINGFACE_MODEL", "gpt-oss:20b")
-    api_key = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_API_KEY")
-    base_url = os.getenv("HUGGINGFACE_BASE_URL", "https://router.huggingface.co/v1")
+def _make_openrouter_llm() -> LLM:
+    """Online mode — OpenRouter inference (CrewAI Enterprise)."""
+    model = os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-20b:free")
+    api_key = os.getenv("OPENROUTER_API_KEY", 'test')
 
     if not api_key:
         raise RuntimeError(
-            "HF_TOKEN is required. Set it in your environment or .env file."
+            "OPENROUTER_API_KEY is required. Set it in your environment or .env file."
         )
 
-    model_name = model if model.startswith("huggingface/") else f"huggingface/{model}"
+    model_name = model if model.startswith("openrouter/") else f"openrouter/{model}"
 
     return LLM(
         model=model_name,
-        base_url=base_url,
+        base_url="https://openrouter.ai/api/v1",
         api_key=api_key,
         temperature=0.1,
         timeout=300,

@@ -4,7 +4,7 @@ set -euo pipefail
 
 BOLD='\033[1m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 
-echo -e "${BOLD}Interview Retro by Jobound.io — CrewAI + Hugging Face setup${NC}\n"
+echo -e "${BOLD}Interview Retro by Jobound.io — CrewAI setup${NC}\n"
 
 # ── 1. uv ──────────────────────────────────────────────────────────────────
 if ! command -v uv &>/dev/null; then
@@ -30,6 +30,4 @@ echo -e ""
 echo -e "${BOLD}Local mode (ollama):${NC}"
 echo -e "  1. Start ollama-bridge:  ${BOLD}cd ollama-bridge && uv run python server.py${NC}"
 echo -e ""
-echo -e "${BOLD}Hosted mode (Hugging Face):${NC}"
-echo -e "  Set in .env:             ${BOLD}HF_TOKEN${NC}"
 echo -e "\nDashboard:          ${BOLD}http://localhost:8765/dashboard${NC}\n"

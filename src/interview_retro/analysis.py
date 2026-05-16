@@ -22,13 +22,13 @@ from crewai import Agent, Crew, LLM, Process, Task
 from interview_retro.llm import make_llm
 
 _CONFIG_DIR = Path(__file__).parent / "config"
-_AGENTS_YAML = _CONFIG_DIR / "agents.yaml"
-_TASKS_YAML = _CONFIG_DIR / "tasks.yaml"
 
 
 def _load_task_descs() -> dict[str, str]:
-    with open(_TASKS_YAML) as f:
-        cfg = yaml.safe_load(f)
+    cfg: dict[str, Any] = {}
+    for fname in ("extraction_tasks.yaml", "debate_tasks.yaml"):
+        with open(_CONFIG_DIR / fname) as f:
+            cfg.update(yaml.safe_load(f))
     return {key: cfg[key]["description"] for key in cfg}
 
 
@@ -98,8 +98,10 @@ def _parse_qa_pairs(raw: str) -> list[dict[str, Any]]:
 
 
 def _make_agents(llm: LLM) -> dict[str, Agent]:
-    with open(_AGENTS_YAML) as f:
-        config = yaml.safe_load(f)
+    config: dict[str, Any] = {}
+    for fname in ("extraction_agents.yaml", "debate_agents.yaml"):
+        with open(_CONFIG_DIR / fname) as f:
+            config.update(yaml.safe_load(f))
 
     def _agent(key: str) -> Agent:
         cfg = config[key]
