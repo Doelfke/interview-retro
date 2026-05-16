@@ -50,12 +50,11 @@ def _make_crew_mock(task_raws: list[str], final_output: str) -> MagicMock:
 
 @patch("interview_retro.analysis.Crew")
 def test_run_returns_qa_pairs_extracted(mock_crew_cls: MagicMock) -> None:
-    real_mock = _make_crew_mock(
-        ["ignored", SAMPLE_QA, SAMPLE_ADVOCACY, SAMPLE_CRITICISM, "ignored"],
-        SAMPLE_RESULT,
-    )
-    mock_crew_cls.return_value = real_mock.return_value
-    mock_crew_cls.side_effect = real_mock.side_effect
+    mock_crew = MagicMock()
+    final = MagicMock()
+    final.__str__ = lambda self: SAMPLE_RESULT
+    mock_crew.kickoff.return_value = final
+    mock_crew_cls.return_value = mock_crew
 
     crew = InterviewAnalysisCrew()
     result = crew.run("some transcript text", "Acme", "Engineer", "onsite")
@@ -140,7 +139,7 @@ def test_run_from_debate_creates_three_tasks(mock_crew_cls: MagicMock) -> None:
     final.__str__ = lambda self: SAMPLE_RESULT
     mock_crew_cls.return_value = mock_crew
 
-    def _side(_: object) -> MagicMock:
+    def _side() -> MagicMock:
         tasks = mock_crew_cls.call_args.kwargs["tasks"]
         for t in tasks:
             t.output = MagicMock(raw='{"advocacy": [], "criticism": []}')
@@ -167,7 +166,7 @@ def test_run_from_debate_embeds_qa_in_advocate_description(mock_crew_cls: MagicM
     final.__str__ = lambda self: SAMPLE_RESULT
     mock_crew_cls.return_value = mock_crew
 
-    def _side(_: object) -> MagicMock:
+    def _side() -> MagicMock:
         tasks = mock_crew_cls.call_args.kwargs["tasks"]
         for t in tasks:
             t.output = MagicMock(raw="{}")
