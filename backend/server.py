@@ -12,10 +12,11 @@ import logging
 import os
 import uuid
 import webbrowser
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import uvicorn
 from dotenv import load_dotenv
@@ -43,9 +44,9 @@ ANALYSIS_QUEUE_MAX = 20  # warn if more than this many analyses are pending
 
 
 class AppState:
-    analysis_queue: Optional[asyncio.Queue] = None
-    analysis_worker_task: Optional[asyncio.Task] = None
-    meetily_watcher_task: Optional[asyncio.Task] = None
+    analysis_queue: Optional[asyncio.Queue[tuple[str, str, str, str, str]]] = None
+    analysis_worker_task: Optional[asyncio.Task[None]] = None
+    meetily_watcher_task: Optional[asyncio.Task[None]] = None
     mlx_server_proc: Optional[asyncio.subprocess.Process] = None
     currently_analyzing: bool = False
 
@@ -54,7 +55,7 @@ state = AppState()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_db()
 
     mlx_model = os.getenv("MLX_MODEL", "mlx-community/Qwen2.5-32B-Instruct-4bit")
@@ -256,7 +257,7 @@ def _mark_analysis_result(
         db.commit()
 
 
-def _update_analysis(interview_id: str, analysis: dict) -> None:
+def _update_analysis(interview_id: str, analysis: dict[str, Any]) -> None:
     with Session(engine) as db:
         interview = db.get(Interview, interview_id)
         if not interview:
@@ -334,7 +335,7 @@ async def _meetily_watcher() -> None:
     logger.info("Meetily startup scan complete — folder watching disabled")
 
 
-def _estimate_meeting_start(segments: list[dict], fallback_path: Path | None = None) -> datetime:
+def _estimate_meeting_start(segments: list[dict[str, Any]], fallback_path: Path | None = None) -> datetime:
     """
     Estimate when the meeting started by finding the earliest wall-clock
     ``timestamp`` value in the transcript segments.
@@ -383,7 +384,7 @@ def _estimate_meeting_start(segments: list[dict], fallback_path: Path | None = N
     return datetime.utcnow()
 
 
-def _meetily_transcript_to_text(segments: list[dict]) -> str:
+def _meetily_transcript_to_text(segments: list[dict[str, Any]]) -> str:
     """
     Convert a list of Meetily transcript segment objects into a plain-text
     transcript string suitable for the analysis crew.
@@ -483,7 +484,7 @@ async def _ingest_meetily_transcript(transcript_path: Path) -> None:
 # ---- REST API --------------------------------------------------------------
 
 @app.get("/status")
-async def get_status():
+async def get_status() -> dict[str, Any]:
     mlx_ok = await _check_mlx_server()
     queue_depth = state.analysis_queue.qsize() if state.analysis_queue else 0
     return {
@@ -508,15 +509,15 @@ async def _check_mlx_server() -> bool:
 
 
 @app.get("/api/interviews")
-async def list_interviews():
+async def list_interviews() -> list[dict[str, Any]]:
     with Session(engine) as db:
         interviews = db.query(Interview).order_by(Interview.created_at.desc()).all()
         return [i.to_dict() for i in interviews]
 
 
 @app.patch("/api/interviews/{interview_id}")
-async def rename_interview(interview_id: str, body: dict):
-    title = (body.get("title") or "").strip()
+async def rename_interview(interview_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    title = str(body.get("title") or "").strip()
     if not title:
         raise HTTPException(400, "title is required")
     if len(title) > 200:
@@ -531,7 +532,7 @@ async def rename_interview(interview_id: str, body: dict):
 
 
 @app.delete("/api/interviews/{interview_id}", status_code=204)
-async def delete_interview(interview_id: str):
+async def delete_interview(interview_id: str) -> None:
     with Session(engine) as db:
         interview = db.get(Interview, interview_id)
         if not interview:
@@ -541,7 +542,7 @@ async def delete_interview(interview_id: str):
 
 
 @app.delete("/api/interviews/{interview_id}/qa/{qa_id}", status_code=200)
-async def delete_qa_pair(interview_id: str, qa_id: str):
+async def delete_qa_pair(interview_id: str, qa_id: str) -> dict[str, Any]:
     with Session(engine) as db:
         qa = db.get(QAPair, qa_id)
         if not qa or qa.interview_id != interview_id:
@@ -571,7 +572,7 @@ async def delete_qa_pair(interview_id: str, qa_id: str):
     return {"ok": True, "overall_score": new_score, "potential_overall_score": potential_overall, "has_potential_scores": has_potential}
 
 
-def _regrade_answer_sync(question: str, new_answer: str, category: str) -> dict:
+def _regrade_answer_sync(question: str, new_answer: str, category: str) -> dict[str, Any]:
     """
     Grade a single interview answer using the same advocate → critic → judge
     crew pipeline used for full interview analysis.
@@ -582,8 +583,8 @@ def _regrade_answer_sync(question: str, new_answer: str, category: str) -> dict:
 
 
 @app.post("/api/interviews/{interview_id}/qa/{qa_id}/regrade")
-async def regrade_qa_pair(interview_id: str, qa_id: str, body: dict):
-    new_answer = (body.get("new_answer") or "").strip()
+async def regrade_qa_pair(interview_id: str, qa_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    new_answer = str(body.get("new_answer") or "").strip()
     if not new_answer:
         raise HTTPException(400, "new_answer is required")
     if len(new_answer) > 10000:
@@ -639,7 +640,7 @@ async def regrade_qa_pair(interview_id: str, qa_id: str, body: dict):
 
 
 @app.get("/api/interviews/{interview_id}")
-async def get_interview(interview_id: str):
+async def get_interview(interview_id: str) -> dict[str, Any]:
     with Session(engine) as db:
         i = db.get(Interview, interview_id)
         if not i:
@@ -650,16 +651,16 @@ async def get_interview(interview_id: str):
 
 
 @app.post("/api/interviews")
-async def create_interview(body: dict):
+async def create_interview(body: dict[str, Any]) -> dict[str, Any]:
     """
     Create an interview record and queue it for AI analysis.
 
     Optional fields: role, stage, title, transcript, start_time, end_time, duration_seconds
     """
-    transcript = body.get("transcript", "")
-    title = (body.get("title") or "").strip()
-    role  = body.get("role", "Software Engineer")
-    stage = body.get("stage", "Phone Screen")
+    transcript = str(body.get("transcript") or "")
+    title = str(body.get("title") or "").strip()
+    role  = str(body.get("role") or "Software Engineer")
+    stage = str(body.get("stage") or "Phone Screen")
 
     interview_id = str(uuid.uuid4())
     with Session(engine) as db:
@@ -668,9 +669,9 @@ async def create_interview(body: dict):
             title=title or f"Interview — {stage}",
             stage=stage,
             transcript=transcript,
-            start_time=datetime.fromisoformat(body["start_time"]) if body.get("start_time") else None,
-            end_time=datetime.fromisoformat(body["end_time"]) if body.get("end_time") else None,
-            duration_seconds=body.get("duration_seconds"),
+            start_time=datetime.fromisoformat(str(body["start_time"])) if body.get("start_time") else None,
+            end_time=datetime.fromisoformat(str(body["end_time"])) if body.get("end_time") else None,
+            duration_seconds=int(body["duration_seconds"]) if body.get("duration_seconds") is not None else None,
             analysis_status="queued" if transcript else "pending",
         )
         db.add(interview)
@@ -690,11 +691,11 @@ async def create_interview(body: dict):
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
-async def serve_dashboard():
+async def serve_dashboard() -> HTMLResponse:
     path = os.path.join(os.path.dirname(__file__), "..", "dashboard", "index.html")
     if os.path.exists(path):
         with open(path) as f:
-            return f.read()
+            return HTMLResponse(f.read())
     return HTMLResponse("<h1>Dashboard not found</h1>", status_code=404)
 
 

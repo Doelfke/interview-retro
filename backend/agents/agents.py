@@ -22,7 +22,7 @@ def make_llm() -> LLM:
     Build a CrewAI LLM that routes to the local mlx_lm.server instance.
     LiteLLM's openai/ provider handles the protocol.  The model name in the
     request must match the model mlx_lm.server was started with — versions
-    ≥0.18 validate (and attempt to download) any unrecognised model name.
+    ≥0.18 validate (and attempt to download) any unrecognized model name.
     """
     base_url = os.getenv("MLX_SERVER_URL", "http://localhost:8081/v1")
     mlx_model = os.getenv("MLX_MODEL", "mlx-community/Qwen2.5-32B-Instruct-4bit")
@@ -36,7 +36,7 @@ def make_llm() -> LLM:
     )
 
 
-def make_agents(llm: LLM | None = None) -> dict:
+def make_agents(llm: LLM | None = None) -> dict[str, Agent]:
     if llm is None:
         llm = make_llm()
 
@@ -48,7 +48,7 @@ def make_agents(llm: LLM | None = None) -> dict:
             "Label every turn as INTERVIEWER or CANDIDATE and fix transcription errors."
         ),
         backstory=(
-            "You are an expert transcriptionist who specialises in job interviews across "
+            "You are an expert transcriptionist who specializes in job interviews across "
             "Zoom, Google Meet, and Teams. You produce clean, speaker-labelled transcripts "
             "with precise timestamps and handle domain-specific jargon with ease."
         ),
@@ -62,12 +62,12 @@ def make_agents(llm: LLM | None = None) -> dict:
         role="Interview Q&A Extraction Expert",
         goal=(
             "Extract every question asked during a job interview and match it with the "
-            "candidate's full answer. Categorise and timestamp each pair."
+            "candidate's full answer. Categorize and timestamp each pair."
         ),
         backstory=(
-            "You specialise in analysing interview transcripts. You perfectly identify "
+            "You specialize in analyzing interview transcripts. You perfectly identify "
             "when a question has been asked — even across multiple turns — extract the "
-            "complete answer, and categorise it: behavioral, technical, situational, "
+            "complete answer, and categorize it: behavioral, technical, situational, "
             "culture_fit, role_specific, or general."
         ),
         verbose=True,
@@ -123,7 +123,7 @@ def make_agents(llm: LLM | None = None) -> dict:
             "Read the advocate's and critic's arguments for each answer. Weigh both "
             "sides and produce a final calibrated score (0-10), specific actionable "
             "feedback that references both perspectives, and — only for scores below "
-            "6 — a substantially better answer the candidate could have given."
+            "7 — a substantially better answer the candidate could have given."
         ),
         backstory=(
             "You are an impartial panel chair who has reviewed thousands of interviews. "

@@ -3,8 +3,7 @@
 import { execSync } from "child_process";
 import { pathToFileURL } from "url";
 
-const FIX_CHECKS_PROMPT_PREFIX =
-  "Use the `fix-checks` agent to fix issues here:";
+const FIX_CHECKS_PROMPT_PREFIX = "Fix these issues:";
 const VSCODE_FORMAT = "vscode";
 const ANSI_REGEX = /\u001B\[[0-?]*[ -/]*[@-~]/g;
 

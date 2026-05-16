@@ -4,7 +4,7 @@ SQLite stored in ~/Library/Mobile Documents/com~apple~CloudDocs/JoBound/intervie
 """
 import os
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from sqlalchemy import (
     create_engine, String, Integer, Float,
     DateTime, Text, ForeignKey, JSON, text
@@ -40,13 +40,13 @@ class Interview(Base):
     analysis_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)                # Why analysis was skipped or failed
     overall_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)              # 0-10 rating
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)                       # AI-generated summary
-    strengths: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)                    # List of strengths
-    weaknesses: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)                   # List of weaknesses
+    strengths: Mapped[Optional[list[Any]]] = mapped_column(JSON, nullable=True)                    # List of strengths
+    weaknesses: Mapped[Optional[list[Any]]] = mapped_column(JSON, nullable=True)                   # List of weaknesses
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow)
 
     qa_pairs: Mapped[list["QAPair"]] = relationship("QAPair", back_populates="interview", cascade="all, delete-orphan")
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         # Compute potential overall score (uses potential_score if set, else original score)
         potential_scored: list[float] = [
             float(p.potential_score if p.potential_score is not None else p.score)  # type: ignore[arg-type]
@@ -95,7 +95,7 @@ class QAPair(Base):
 
     interview: Mapped["Interview"] = relationship("Interview", back_populates="qa_pairs")
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "interview_id": self.interview_id,
@@ -194,7 +194,7 @@ def _add_missing_columns() -> None:
                 conn.commit()
 
 
-def init_db():
+def init_db() -> None:
     _pre_migrate()
     Base.metadata.create_all(engine)
     _add_missing_columns()

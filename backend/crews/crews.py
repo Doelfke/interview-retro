@@ -3,7 +3,8 @@ CrewAI Crews
 InterviewAnalysisCrew — processes a transcript through a 5-agent debate pipeline.
 """
 import json
-from crewai import Crew, Task, Process
+from typing import Any
+from crewai import Crew, Task, Process, LLM
 from agents.agents import make_agents
 
 
@@ -152,10 +153,10 @@ class InterviewAnalysisCrew:
     the judge must rule on concrete arguments rather than first impressions.
     """
 
-    def __init__(self, llm=None):
+    def __init__(self, llm: LLM | None = None) -> None:
         self.agents = make_agents(llm)
 
-    def run(self, transcript: str, company_name: str, role: str, stage: str) -> dict:
+    def run(self, transcript: str, company_name: str, role: str, stage: str) -> dict[str, Any]:
         agents = self.agents
 
         # ── Task 1: Structure the transcript ──────────────────────────────────
@@ -170,7 +171,7 @@ class InterviewAnalysisCrew:
             Clean and structure it:
             1. Label every turn as INTERVIEWER or CANDIDATE
             2. Fix obvious transcription errors ("your" vs "you're", etc.)
-            3. Preserve all content — do not summarise or omit anything
+            3. Preserve all content — do not summarize or omit anything
 
             Return ONLY this JSON:
             {{
@@ -286,7 +287,7 @@ class InterviewAnalysisCrew:
         company_name: str = "this company",
         stage: str = "the interview",
         role: str = "this role",
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Run a single Q&A pair through the same advocate → critic → judge pipeline
         used by the full interview analysis.  Returns score, feedback, and
@@ -366,7 +367,7 @@ class InterviewAnalysisCrew:
         rated = parsed.get("rated_qa", [{}])[0] if parsed.get("rated_qa") else parsed
         score = float(rated.get("score", 0))
         score = max(0.0, min(10.0, score))
-        suggested = rated.get("suggested_answer") if score < 6 else None
+        suggested = rated.get("suggested_answer") if score < 7 else None
 
         return {
             "score": score,

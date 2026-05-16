@@ -2,7 +2,7 @@
 name = "interview-retro"
 version = "1.0.0"
 description = "AI-powered interview analysis — fully local on Apple Silicon via MLX"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
     # ── Web server ─────────────────────────────────────────────────────────
     "fastapi>=0.115.0",
@@ -42,6 +42,12 @@ packages = ["backend"]
 
 [tool.uv]
 # uv automatically selects arm64 wheels for mlx and mlx-lm
+# tiktoken 0.8.0 uses pyo3 0.22 which doesn't support Python 3.14; override to 0.13.0+
+override-dependencies = [
+    "tiktoken>=0.13.0",
+    "pydantic>=2.13.4",
+    "pydantic-core>=2.46.4",
+]
 
 [[tool.uv.index]]
 url = "https://pypi.org/simple"
@@ -51,3 +57,23 @@ dev = [
     "ruff>=0.15.13",
     "pyright>=1.1.0",
 ]
+
+[tool.ruff]
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+    "ANN",   # flake8-annotations: enforce type annotations
+]
+
+[tool.pyright]
+pythonVersion = "3.14"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"
+extraPaths = ["backend"]
+reportMissingTypeArgument = "error"
+reportMissingParameterType = "error"
+reportReturnType = "error"
+reportUnknownVariableType = "warning"
+reportUnknownParameterType = "warning"

@@ -60,9 +60,9 @@ Test new responses
 ---
 
 ## Requirements
+- uv
 - [meetily](https://github.com/Zackriya-Solutions/meetily)
 - **Apple Silicon Mac** (M-series)
-- **[Homebrew](https://brew.sh)** — `setup.sh` uses it to install `ffmpeg`
 
 ---
 
