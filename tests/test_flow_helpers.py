@@ -19,7 +19,7 @@ class TestCheckQuality:
             "overall_score": 8.0,
         }
         issues, route = _check_quality(result, qa_pairs_extracted=3)
-        assert "thin_output" in issues
+        assert any(i.startswith("thin_output") for i in issues)
         assert route == "retry_judge"
 
     def test_parse_failure_routes_to_retry_judge(self) -> None:
@@ -34,7 +34,7 @@ class TestCheckQuality:
             "overall_score": 4.5,
         }
         issues, route = _check_quality(result, qa_pairs_extracted=2)
-        assert "low_score" in issues
+        assert any(i.startswith("low_score") for i in issues)
         assert route == "retry_judge"
 
     def test_passing_quality_returns_no_issues(self) -> None:
