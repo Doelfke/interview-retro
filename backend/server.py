@@ -16,7 +16,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import uvicorn
 from dotenv import load_dotenv
@@ -422,22 +422,25 @@ async def _ingest_meetily_transcript(transcript_path: Path) -> None:
         return
 
     # transcripts.json may be a bare list or wrapped in an object
+    raw_segments: list[dict[str, object]]
     if isinstance(data, list):
-        segments = data
+        data_list = cast(list[object], data)
+        raw_segments = [cast(dict[str, object], s) for s in data_list if isinstance(s, dict)]
     elif isinstance(data, dict):
         # Try common wrapper keys
-        segments = (
+        wrapped: list[object] = list(
             data.get("transcripts")
             or data.get("segments")
             or data.get("transcript")
             or []
         )
+        raw_segments = [cast(dict[str, object], s) for s in wrapped if isinstance(s, dict)]
     else:
         logger.error(f"Unexpected transcripts.json shape in {transcript_path}")
         return
 
     # Filter out partial / low-confidence segments if flagged
-    segments = [s for s in segments if not s.get("is_partial", False)]
+    segments: list[dict[str, object]] = [s for s in raw_segments if not s.get("is_partial", False)]
 
     transcript_text = _meetily_transcript_to_text(segments)
     if not transcript_text:

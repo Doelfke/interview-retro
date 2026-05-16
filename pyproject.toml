@@ -33,8 +33,11 @@ dependencies = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[project.scripts]
+interview_retro = "interview_retro.main:run"
+
 [tool.hatch.build.targets.wheel]
-packages = ["backend"]
+packages = ["backend", "crew", "src/interview_retro"]
 
 [tool.uv]
 # uv automatically selects arm64 wheels for mlx and mlx-lm
@@ -71,5 +74,6 @@ extraPaths = ["backend"]
 reportMissingTypeArgument = "error"
 reportMissingParameterType = "error"
 reportReturnType = "error"
-reportUnknownVariableType = "warning"
-reportUnknownParameterType = "warning"
+reportUnknownVariableType = "error"
+reportUnknownParameterType = "error"
+reportAny = "error"

@@ -23,6 +23,11 @@ venv/
 ENV/
 env/
 
+# Environment files
+.env
+.env.*
+*.env
+
 # uv
 uv.lock
 
