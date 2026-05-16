@@ -30,7 +30,6 @@ class Interview(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     title: Mapped[Optional[str]] = mapped_column(String, nullable=True)                       # e.g. "Phone Screen", "Technical Round 2"
-    stage: Mapped[Optional[str]] = mapped_column(String, nullable=True)                       # Interview stage
     transcript: Mapped[Optional[str]] = mapped_column(Text, nullable=True)                    # Full interview transcript
     start_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     end_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -58,7 +57,6 @@ class Interview(Base):
         return {
             "id": self.id,
             "title": self.title,
-            "stage": self.stage,
             "start_time": self.start_time.isoformat() if self.start_time else None,
             "end_time": self.end_time.isoformat() if self.end_time else None,
             "duration_seconds": self.duration_seconds,
@@ -145,7 +143,6 @@ def _pre_migrate() -> None:
                 CREATE TABLE interviews_new (
                     id TEXT PRIMARY KEY,
                     title TEXT,
-                    stage TEXT,
                     transcript TEXT,
                     start_time DATETIME,
                     end_time DATETIME,
@@ -161,7 +158,7 @@ def _pre_migrate() -> None:
             """))
             conn.execute(text("""
                 INSERT INTO interviews_new
-                SELECT id, title, stage, transcript, start_time, end_time,
+                SELECT id, title, transcript, start_time, end_time,
                        duration_seconds, analysis_status, analysis_error,
                        overall_score, summary, strengths, weaknesses, created_at
                 FROM interviews

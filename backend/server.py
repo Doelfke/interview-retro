@@ -402,15 +402,12 @@ async def _ingest_meetily_transcript(transcript_path: Path) -> None:
     time_str = meeting_start.strftime("%H:%M")
 
     title = f"Interview - {date_str} {time_str}"
-    role  = "Software Engineer"
-    stage = "Recording"
 
     with Session(engine) as db:
         interview_id = str(uuid.uuid4())
         interview = Interview(
             id=interview_id,
             title=title,
-            stage=stage,
             transcript=transcript_text,
             source_path=str(transcript_path),
             analysis_status="pending",
@@ -595,19 +592,14 @@ async def create_interview(body: dict[str, Any]) -> dict[str, Any]:
     """
     Create an interview record.
 
-    Optional fields: role, stage, title, transcript, start_time, end_time, duration_seconds
+    Optional fields: transcript, start_time, end_time, duration_seconds
     """
     transcript = str(body.get("transcript") or "")
-    title = str(body.get("title") or "").strip()
-    role  = str(body.get("role") or "Software Engineer")
-    stage = str(body.get("stage") or "Phone Screen")
 
     interview_id = str(uuid.uuid4())
     with Session(engine) as db:
         interview = Interview(
             id=interview_id,
-            title=title or f"Interview — {stage}",
-            stage=stage,
             transcript=transcript,
             start_time=datetime.fromisoformat(str(body["start_time"])) if body.get("start_time") else None,
             end_time=datetime.fromisoformat(str(body["end_time"])) if body.get("end_time") else None,
@@ -644,7 +636,7 @@ async def trigger_interview_analysis(interview_id: str) -> dict[str, Any]:
         interview.analysis_error = None
         db.commit()
 
-        title = interview.title or interview.stage or "Interview"
+        title = interview.title or "Interview"
 
     try:
         state.event_bus.analysis_queue.put_nowait(
