@@ -645,17 +645,12 @@ async def trigger_interview_analysis(interview_id: str) -> dict[str, Any]:
         db.commit()
 
         title = interview.title or interview.stage or "Interview"
-        role = "Software Engineer"
-        stage = interview.stage or "Interview"
 
     try:
         state.event_bus.analysis_queue.put_nowait(
             AnalysisRequested(
                 interview_id=interview_id,
                 transcript=transcript,
-                company_name=title,
-                role=role,
-                stage=stage,
             )
         )
     except asyncio.QueueFull:

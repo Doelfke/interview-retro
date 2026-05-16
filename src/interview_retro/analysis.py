@@ -136,9 +136,6 @@ class InterviewAnalysisCrew:
     def _run_pair_debate(
         self,
         qa_pair: dict[str, Any],
-        company_name: str,
-        role: str,
-        stage: str,
     ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         """Run advocate → critic → judge for a single Q&A pair.
 
@@ -149,9 +146,7 @@ class InterviewAnalysisCrew:
 
         task_advocate = Task(
             description=(
-                _TASK_DESCS["advocate_single_task"].format(
-                    company_name=company_name, stage=stage, role=role
-                )
+                _TASK_DESCS["advocate_single_task"]
                 + f"\n\nQ&A Pair:\n{pair_json}"
             ),
             agent=agents["advocate"],
@@ -159,18 +154,14 @@ class InterviewAnalysisCrew:
         )
 
         task_critic = Task(
-            description=_TASK_DESCS["critic_single_task"].format(
-                company_name=company_name, stage=stage
-            ),
+            description=_TASK_DESCS["critic_single_task"],
             agent=agents["critic"],
             expected_output="JSON with weaknesses (array), rebuttal_of_advocate, critic_summary",
             context=[task_advocate],
         )
 
         task_judge = Task(
-            description=_TASK_DESCS["judge_single_task"].format(
-                company_name=company_name, stage=stage, role=role
-            ),
+            description=_TASK_DESCS["judge_single_task"],
             agent=agents["judge"],
             expected_output="JSON with score (float), feedback (string), suggested_answer (string or null)",
             context=[task_advocate, task_critic],
@@ -256,14 +247,11 @@ class InterviewAnalysisCrew:
     def run(
         self,
         transcript: str,
-        company_name: str,
-        role: str,
-        stage: str,
         enrichment: str | None = None,
     ) -> dict[str, Any]:
         agents = self.agents
 
-        transcription_desc = _TASK_DESCS["transcription_task"].format(company_name=company_name)
+        transcription_desc = _TASK_DESCS["transcription_task"]
         if enrichment:
             transcription_desc = enrichment + transcription_desc
 
@@ -274,9 +262,7 @@ class InterviewAnalysisCrew:
         )
 
         task_extract_qa = Task(
-            description=_TASK_DESCS["qa_extraction_task"].format(
-                company_name=company_name, role=role, stage=stage
-            ),
+            description=_TASK_DESCS["qa_extraction_task"],
             agent=agents["qa_extractor"],
             expected_output="JSON with qa_pairs array",
             context=[task_structure],
@@ -300,7 +286,7 @@ class InterviewAnalysisCrew:
 
         for qa_pair in qa_pairs:
             advocacy_entry, criticism_entry, judge_entry = self._run_pair_debate(
-                qa_pair, company_name, role, stage
+                qa_pair
             )
             all_advocacy.append(advocacy_entry)
             all_criticism.append(criticism_entry)
@@ -313,9 +299,6 @@ class InterviewAnalysisCrew:
         qa_pairs: list[dict[str, Any]],
         advocacy: list[dict[str, Any]],
         criticism: list[dict[str, Any]],
-        company_name: str,
-        role: str,
-        stage: str,
         enrichment: str | None = None,
     ) -> dict[str, Any]:
         """Run only the judge task per Q&A pair with pre-computed advocacy and criticism."""
@@ -325,9 +308,7 @@ class InterviewAnalysisCrew:
         for qa_pair, adv_entry, crit_entry in zip(qa_pairs, advocacy, criticism):
             judge_desc = (
                 (enrichment or "")
-                + _TASK_DESCS["judge_single_task"].format(
-                    company_name=company_name, stage=stage, role=role
-                )
+                + _TASK_DESCS["judge_single_task"]
                 + f"\n\nQ&A Pair:\n{json.dumps(qa_pair, indent=2)}"
                 + f"\n\nAdvocacy:\n{json.dumps(adv_entry, indent=2)}"
                 + f"\n\nCriticism:\n{json.dumps(crit_entry, indent=2)}"
@@ -360,9 +341,6 @@ class InterviewAnalysisCrew:
     def run_from_debate(
         self,
         qa_pairs: list[dict[str, Any]],
-        company_name: str,
-        role: str,
-        stage: str,
         enrichment: str | None = None,
     ) -> dict[str, Any]:
         """Run advocate + critic + judge per Q&A pair."""
@@ -372,7 +350,7 @@ class InterviewAnalysisCrew:
 
         for qa_pair in qa_pairs:
             advocacy_entry, criticism_entry, judge_entry = self._run_pair_debate(
-                qa_pair, company_name, role, stage
+                qa_pair
             )
             all_advocacy.append(advocacy_entry)
             all_criticism.append(criticism_entry)

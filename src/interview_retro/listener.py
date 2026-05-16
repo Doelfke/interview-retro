@@ -59,9 +59,6 @@ async def run_analysis_listener(
             result = await asyncio.to_thread(
                 InterviewAnalysisCrew().run,
                 event.transcript,
-                event.company_name,
-                event.role,
-                event.stage,
             )
             await on_complete(event.interview_id, result)
 

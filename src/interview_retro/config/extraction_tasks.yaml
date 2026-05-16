@@ -1,6 +1,6 @@
 transcription_task:
   description: >
-    Clean and structure the raw interview transcript for {company_name}.
+    Clean and structure the raw interview transcript.
     Label every turn as INTERVIEWER or CANDIDATE and fix transcription errors.
     Preserve all content — do not summarize or omit anything.
   expected_output: >
@@ -10,8 +10,7 @@ transcription_task:
 
 qa_extraction_task:
   description: >
-    Extract every question-answer pair from the structured transcript of this
-    {company_name} interview for the {role} position ({stage}).
+    Extract every question-answer pair from the structured transcript.
     Categorize and timestamp each pair.
   expected_output: >
     JSON with a qa_pairs array of objects containing question, answer,

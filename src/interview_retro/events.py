@@ -17,9 +17,6 @@ class AnalysisRequested:
     """Published by the backend when a transcript is ready for AI analysis."""
     interview_id: str
     transcript: str
-    company_name: str
-    role: str
-    stage: str
 
 
 @dataclass

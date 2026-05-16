@@ -13,9 +13,6 @@ from interview_retro.analysis import InterviewAnalysisCrew
 
 class RetroState(FlowState):
     transcript: str = ""
-    company_name: str = ""
-    role: str = ""
-    stage: str = ""
 
     retry_count: int = 0
     quality_issues: list[str] = Field(default_factory=list)
@@ -90,9 +87,6 @@ class InterviewRetroFlow(Flow[RetroState]):
             qa_pairs=self.state.checkpoint_qa_pairs,
             advocacy=self.state.checkpoint_advocacy,
             criticism=self.state.checkpoint_criticism,
-            company_name=self.state.company_name,
-            role=self.state.role,
-            stage=self.state.stage,
             enrichment=enrichment,
         )
         self.state.last_result = result
@@ -107,9 +101,6 @@ class InterviewRetroFlow(Flow[RetroState]):
         )
         result = InterviewAnalysisCrew().run(
             self.state.transcript,
-            self.state.company_name,
-            self.state.role,
-            self.state.stage,
             enrichment=enrichment,
         )
         checkpoints: dict[str, Any] = result.pop("_checkpoints", {})  # type: ignore[union-attr]
@@ -122,9 +113,6 @@ class InterviewRetroFlow(Flow[RetroState]):
     def run_initial_crew(self) -> None:
         result = InterviewAnalysisCrew().run(
             self.state.transcript,
-            self.state.company_name,
-            self.state.role,
-            self.state.stage,
         )
         checkpoints: dict[str, Any] = result.pop("_checkpoints", {})  # type: ignore[union-attr]
         self.state.last_result = result
@@ -160,15 +148,9 @@ class InterviewRetroFlow(Flow[RetroState]):
 
 def kickoff(
     transcript: str = "",
-    company_name: str = "",
-    role: str = "",
-    stage: str = "",
 ) -> None:
     InterviewRetroFlow().kickoff(inputs=dict(
         transcript=transcript,
-        company_name=company_name,
-        role=role,
-        stage=stage,
     ))
 
 
