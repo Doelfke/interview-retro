@@ -47,3 +47,36 @@ judge_task:
     JSON with rated_qa array (score, feedback, suggested_answer per pair),
     plus overall_score, strengths, weaknesses, and summary.
   agent: judge_agent
+
+# ── Single Q&A pair variants (used by the per-pair debate sub-flow) ──────────
+
+advocate_single_task:
+  description: >
+    For this single Q&A pair from a {company_name} {stage} interview, build
+    the strongest honest case that the candidate answered well. Be specific
+    and thorough — vague praise is useless.
+  expected_output: >
+    JSON with strengths (array of strings) and advocate_summary (string).
+  agent: advocate_agent
+
+critic_single_task:
+  description: >
+    Read the advocate's case for this single answer from a {company_name}
+    {stage} interview and argue specifically why it falls short. Challenge
+    every claimed strength with a concrete counter.
+  expected_output: >
+    JSON with weaknesses (array of strings), rebuttal_of_advocate (string),
+    and critic_summary (string).
+  agent: critic_agent
+
+judge_single_task:
+  description: >
+    Weigh the advocate's and critic's arguments for this single answer from
+    a {company_name} {stage} interview for {role}. Deliver a final calibrated
+    score (0.0–10.0) and actionable feedback referencing both sides. For scores
+    below 6, also provide a substantially better answer the candidate could
+    have given.
+  expected_output: >
+    JSON with score (float 0.0–10.0), feedback (string), and
+    suggested_answer (string or null — required when score < 6).
+  agent: judge_agent

@@ -24,6 +24,14 @@ const CHECKS = [
     title: "Main Type errors",
     command: "uv run pyright src/",
   },
+  {
+    title: "Lint Bridge",
+    command: "uv run ruff check ollama-bridge/",
+  },
+  {
+    title: "Bridge Type errors",
+    command: "uv run pyright ollama-bridge/",
+  },
 ];
 
 function runCheck(command) {

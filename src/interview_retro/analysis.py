@@ -53,6 +53,50 @@ def _parse_list(raw: str, key: str) -> list[dict[str, object]]:
         return []
 
 
+def _parse_qa_pairs(raw: str) -> list[dict[str, Any]]:
+    """Parse Q&A pairs from extraction output, handling common LLM wrapping variations.
+
+    Handles:
+      - {"qa_pairs": [pair1, pair2]}          ← normal case
+      - [pair1, pair2]                         ← bare array
+      - [{"qa_pairs": [pair1, pair2]}]         ← doubly-wrapped (LLM nests the object)
+      - {"qa_pairs": [{"qa_pairs": [...]}]}    ← same, but dict outer
+    """
+    try:
+        raw_parsed: Any = json.loads(_strip_fence(raw))
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return []
+
+    def _to_list(val: Any) -> list[Any]:  # noqa: ANN401
+        return list(val) if isinstance(val, list) else []
+
+    # Unwrap top-level object into a list
+    if isinstance(raw_parsed, dict):
+        d: dict[str, Any] = raw_parsed  # type: ignore[assignment]
+        items: list[Any] = _to_list(d.get("qa_pairs") or d.get("pairs"))
+    elif isinstance(raw_parsed, list):
+        items = raw_parsed  # type: ignore[assignment]
+    else:
+        return []
+
+    # Each item should be a flat pair dict; if an item still carries a
+    # "qa_pairs" wrapper the LLM nested things one level too deep — flatten it.
+    result: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item_d: dict[str, Any] = item  # type: ignore[assignment]
+        if "qa_pairs" in item_d or "pairs" in item_d:
+            inner = _to_list(item_d.get("qa_pairs") or item_d.get("pairs"))
+            result.extend(d for d in inner if isinstance(d, dict))
+        elif "question" in item_d or "answer" in item_d:
+            result.append(item_d)
+
+    return result
+
+    return result
+
+
 def _make_agents(llm: LLM) -> dict[str, Agent]:
     with open(_AGENTS_YAML) as f:
         config = yaml.safe_load(f)
@@ -83,6 +127,130 @@ class InterviewAnalysisCrew:
     def __init__(self, llm: LLM | None = None) -> None:
         self.agents = _make_agents(llm or make_llm())
 
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _run_pair_debate(
+        self,
+        qa_pair: dict[str, Any],
+        company_name: str,
+        role: str,
+        stage: str,
+    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+        """Run advocate → critic → judge for a single Q&A pair.
+
+        Returns (advocacy_entry, criticism_entry, judge_entry).
+        """
+        agents = self.agents
+        pair_json = json.dumps(qa_pair, indent=2)
+
+        task_advocate = Task(
+            description=(
+                _TASK_DESCS["advocate_single_task"].format(
+                    company_name=company_name, stage=stage, role=role
+                )
+                + f"\n\nQ&A Pair:\n{pair_json}"
+            ),
+            agent=agents["advocate"],
+            expected_output="JSON with strengths (array) and advocate_summary",
+        )
+
+        task_critic = Task(
+            description=_TASK_DESCS["critic_single_task"].format(
+                company_name=company_name, stage=stage
+            ),
+            agent=agents["critic"],
+            expected_output="JSON with weaknesses (array), rebuttal_of_advocate, critic_summary",
+            context=[task_advocate],
+        )
+
+        task_judge = Task(
+            description=_TASK_DESCS["judge_single_task"].format(
+                company_name=company_name, stage=stage, role=role
+            ),
+            agent=agents["judge"],
+            expected_output="JSON with score (float), feedback (string), suggested_answer (string or null)",
+            context=[task_advocate, task_critic],
+        )
+
+        crew = Crew(
+            agents=[agents["advocate"], agents["critic"], agents["judge"]],
+            tasks=[task_advocate, task_critic, task_judge],
+            process=Process.sequential,
+            verbose=True,
+        )
+
+        crew.kickoff()
+
+        def _parse_obj(raw: str, fallback: dict[str, Any]) -> dict[str, Any]:
+            try:
+                return json.loads(_strip_fence(raw))  # type: ignore[no-any-return]
+            except (json.JSONDecodeError, AttributeError, TypeError):
+                return fallback
+
+        advocacy_entry = _parse_obj(
+            task_advocate.output.raw if task_advocate.output else "",
+            {"strengths": [], "advocate_summary": ""},
+        )
+        criticism_entry = _parse_obj(
+            task_critic.output.raw if task_critic.output else "",
+            {"weaknesses": [], "rebuttal_of_advocate": "", "critic_summary": ""},
+        )
+        judge_entry = _parse_obj(
+            task_judge.output.raw if task_judge.output else "",
+            {"score": 0.0, "feedback": "", "suggested_answer": None},
+        )
+
+        return advocacy_entry, criticism_entry, judge_entry
+
+    @staticmethod
+    def _assemble_result(
+        qa_pairs: list[dict[str, Any]],
+        all_advocacy: list[dict[str, Any]],
+        all_criticism: list[dict[str, Any]],
+        per_pair_judges: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Combine per-pair debate results into the standard output structure."""
+        rated_qa: list[dict[str, Any]] = []
+        for qa_pair, judge_entry in zip(qa_pairs, per_pair_judges):
+            rated_qa.append({
+                "question": qa_pair.get("question", ""),
+                "answer": qa_pair.get("answer", ""),
+                "category": qa_pair.get("category", ""),
+                "timestamp_seconds": qa_pair.get("timestamp_seconds"),
+                "score": judge_entry.get("score", 0.0),
+                "feedback": judge_entry.get("feedback", ""),
+                "suggested_answer": judge_entry.get("suggested_answer"),
+            })
+
+        overall_score = (
+            sum(r["score"] for r in rated_qa) / len(rated_qa) if rated_qa else 0.0
+        )
+
+        return {
+            "rated_qa": rated_qa,
+            "overall_score": overall_score,
+            "strengths": [],
+            "weaknesses": [],
+            "summary": (
+                f"{len(rated_qa)} Q&A pairs evaluated. "
+                f"Overall score: {overall_score:.1f}/10."
+            ),
+            "analysis_status": "complete",
+            "analysis_error": None,
+            "qa_pairs_extracted": len(qa_pairs),
+            "_checkpoints": {
+                "qa_pairs": qa_pairs,
+                "advocacy": all_advocacy,
+                "criticism": all_criticism,
+            },
+        }
+
+    # ------------------------------------------------------------------
+    # Public methods
+    # ------------------------------------------------------------------
+
     def run(
         self,
         transcript: str,
@@ -112,81 +280,31 @@ class InterviewAnalysisCrew:
             context=[task_structure],
         )
 
-        task_advocate = Task(
-            description=_TASK_DESCS["advocate_task"].format(
-                company_name=company_name, stage=stage, role=role
-            ),
-            agent=agents["advocate"],
-            expected_output="JSON with advocacy array — one entry per Q&A pair",
-            context=[task_extract_qa],
-        )
-
-        task_critic = Task(
-            description=_TASK_DESCS["critic_task"].format(
-                company_name=company_name, stage=stage
-            ),
-            agent=agents["critic"],
-            expected_output="JSON with criticism array — one entry per Q&A pair",
-            context=[task_extract_qa, task_advocate],
-        )
-
-        task_judge = Task(
-            description=_TASK_DESCS["judge_task"].format(
-                company_name=company_name, stage=stage, role=role
-            ),
-            agent=agents["judge"],
-            expected_output="JSON with rated_qa, overall_score, strengths, weaknesses, summary",
-            context=[task_extract_qa, task_advocate, task_critic],
-        )
-
-        crew = Crew(
-            agents=[
-                agents["transcription"],
-                agents["qa_extractor"],
-                agents["advocate"],
-                agents["critic"],
-                agents["judge"],
-            ],
-            tasks=[task_structure, task_extract_qa, task_advocate, task_critic, task_judge],
+        Crew(
+            agents=[agents["transcription"], agents["qa_extractor"]],
+            tasks=[task_structure, task_extract_qa],
             process=Process.sequential,
             verbose=True,
+        ).kickoff()
+
+        qa_pairs = _parse_qa_pairs(
+            task_extract_qa.output.raw if task_extract_qa.output else ""
         )
 
-        result = crew.kickoff()
+        # Run advocate → critic → judge for each Q&A pair in series
+        all_advocacy: list[dict[str, Any]] = []
+        all_criticism: list[dict[str, Any]] = []
+        per_pair_judges: list[dict[str, Any]] = []
 
-        qa_pairs = _parse_list(
-            task_extract_qa.output.raw if task_extract_qa.output else "", "qa_pairs"
-        )
-        advocacy = _parse_list(
-            task_advocate.output.raw if task_advocate.output else "", "advocacy"
-        )
-        criticism = _parse_list(
-            task_critic.output.raw if task_critic.output else "", "criticism"
-        )
+        for qa_pair in qa_pairs:
+            advocacy_entry, criticism_entry, judge_entry = self._run_pair_debate(
+                qa_pair, company_name, role, stage
+            )
+            all_advocacy.append(advocacy_entry)
+            all_criticism.append(criticism_entry)
+            per_pair_judges.append(judge_entry)
 
-        try:
-            parsed: dict[str, Any] = json.loads(_strip_fence(str(result)))
-            parsed.setdefault("analysis_status", "complete")
-            parsed.setdefault("analysis_error", None)
-        except json.JSONDecodeError:
-            parsed = {
-                "rated_qa": [],
-                "overall_score": 0,
-                "strengths": [],
-                "weaknesses": [],
-                "summary": str(result),
-                "raw_output": str(result),
-                "analysis_status": "failed",
-                "analysis_error": "Crew output was not valid JSON",
-            }
-
-        parsed["qa_pairs_extracted"] = len(qa_pairs)
-        parsed["_checkpoints"] = {
-            "qa_pairs": qa_pairs,
-            "advocacy": advocacy,
-            "criticism": criticism,
-        }
-        return parsed
+        return self._assemble_result(qa_pairs, all_advocacy, all_criticism, per_pair_judges)
 
     def run_from_judge(
         self,
@@ -198,56 +316,44 @@ class InterviewAnalysisCrew:
         stage: str,
         enrichment: str | None = None,
     ) -> dict[str, Any]:
-        """Run only the judge task with all context embedded in the description."""
+        """Run only the judge task per Q&A pair with pre-computed advocacy and criticism."""
         agents = self.agents
+        per_pair_judges: list[dict[str, Any]] = []
 
-        judge_desc = (
-            (enrichment or "")
-            + _TASK_DESCS["judge_task"].format(
-                company_name=company_name, stage=stage, role=role
+        for qa_pair, adv_entry, crit_entry in zip(qa_pairs, advocacy, criticism):
+            judge_desc = (
+                (enrichment or "")
+                + _TASK_DESCS["judge_single_task"].format(
+                    company_name=company_name, stage=stage, role=role
+                )
+                + f"\n\nQ&A Pair:\n{json.dumps(qa_pair, indent=2)}"
+                + f"\n\nAdvocacy:\n{json.dumps(adv_entry, indent=2)}"
+                + f"\n\nCriticism:\n{json.dumps(crit_entry, indent=2)}"
             )
-            + f"\n\nQ&A Pairs:\n{json.dumps(qa_pairs, indent=2)}"
-            + f"\n\nAdvocacy:\n{json.dumps(advocacy, indent=2)}"
-            + f"\n\nCriticism:\n{json.dumps(criticism, indent=2)}"
-        )
 
-        task_judge = Task(
-            description=judge_desc,
-            agent=agents["judge"],
-            expected_output="JSON with rated_qa, overall_score, strengths, weaknesses, summary",
-        )
+            task_judge = Task(
+                description=judge_desc,
+                agent=agents["judge"],
+                expected_output="JSON with score (float), feedback (string), suggested_answer (string or null)",
+            )
 
-        crew = Crew(
-            agents=[agents["judge"]],
-            tasks=[task_judge],
-            process=Process.sequential,
-            verbose=True,
-        )
+            Crew(
+                agents=[agents["judge"]],
+                tasks=[task_judge],
+                process=Process.sequential,
+                verbose=True,
+            ).kickoff()
 
-        result = crew.kickoff()
+            try:
+                judge_entry: dict[str, Any] = json.loads(
+                    _strip_fence(task_judge.output.raw if task_judge.output else "")
+                )
+            except (json.JSONDecodeError, AttributeError, TypeError):
+                judge_entry = {"score": 0.0, "feedback": "", "suggested_answer": None}
 
-        try:
-            parsed: dict[str, Any] = json.loads(_strip_fence(str(result)))
-            parsed.setdefault("analysis_status", "complete")
-            parsed.setdefault("analysis_error", None)
-        except json.JSONDecodeError:
-            parsed = {
-                "rated_qa": [],
-                "overall_score": 0,
-                "strengths": [],
-                "weaknesses": [],
-                "summary": str(result),
-                "analysis_status": "failed",
-                "analysis_error": "Judge output was not valid JSON",
-            }
+            per_pair_judges.append(judge_entry)
 
-        parsed["qa_pairs_extracted"] = len(qa_pairs)
-        parsed["_checkpoints"] = {
-            "qa_pairs": qa_pairs,
-            "advocacy": advocacy,
-            "criticism": criticism,
-        }
-        return parsed
+        return self._assemble_result(qa_pairs, advocacy, criticism, per_pair_judges)
 
     def run_from_debate(
         self,
@@ -257,79 +363,20 @@ class InterviewAnalysisCrew:
         stage: str,
         enrichment: str | None = None,
     ) -> dict[str, Any]:
-        """Run advocate + critic + judge with qa_pairs embedded in the advocate description."""
-        agents = self.agents
+        """Run advocate + critic + judge per Q&A pair."""
+        all_advocacy: list[dict[str, Any]] = []
+        all_criticism: list[dict[str, Any]] = []
+        per_pair_judges: list[dict[str, Any]] = []
 
-        advocate_desc = (
-            (enrichment or "")
-            + _TASK_DESCS["advocate_task"].format(
-                company_name=company_name, stage=stage, role=role
+        for qa_pair in qa_pairs:
+            advocacy_entry, criticism_entry, judge_entry = self._run_pair_debate(
+                qa_pair, company_name, role, stage
             )
-            + f"\n\nQ&A Pairs to evaluate:\n{json.dumps(qa_pairs, indent=2)}"
-        )
+            all_advocacy.append(advocacy_entry)
+            all_criticism.append(criticism_entry)
+            per_pair_judges.append(judge_entry)
 
-        task_advocate = Task(
-            description=advocate_desc,
-            agent=agents["advocate"],
-            expected_output="JSON with advocacy array — one entry per Q&A pair",
-        )
-
-        task_critic = Task(
-            description=_TASK_DESCS["critic_task"].format(
-                company_name=company_name, stage=stage
-            ),
-            agent=agents["critic"],
-            expected_output="JSON with criticism array — one entry per Q&A pair",
-            context=[task_advocate],
-        )
-
-        task_judge = Task(
-            description=_TASK_DESCS["judge_task"].format(
-                company_name=company_name, stage=stage, role=role
-            ),
-            agent=agents["judge"],
-            expected_output="JSON with rated_qa, overall_score, strengths, weaknesses, summary",
-            context=[task_advocate, task_critic],
-        )
-
-        crew = Crew(
-            agents=[agents["advocate"], agents["critic"], agents["judge"]],
-            tasks=[task_advocate, task_critic, task_judge],
-            process=Process.sequential,
-            verbose=True,
-        )
-
-        result = crew.kickoff()
-
-        new_advocacy = _parse_list(
-            task_advocate.output.raw if task_advocate.output else "", "advocacy"
-        )
-        new_criticism = _parse_list(
-            task_critic.output.raw if task_critic.output else "", "criticism"
-        )
-
-        try:
-            parsed: dict[str, Any] = json.loads(_strip_fence(str(result)))
-            parsed.setdefault("analysis_status", "complete")
-            parsed.setdefault("analysis_error", None)
-        except json.JSONDecodeError:
-            parsed = {
-                "rated_qa": [],
-                "overall_score": 0,
-                "strengths": [],
-                "weaknesses": [],
-                "summary": str(result),
-                "analysis_status": "failed",
-                "analysis_error": "Debate output was not valid JSON",
-            }
-
-        parsed["qa_pairs_extracted"] = len(qa_pairs)
-        parsed["_checkpoints"] = {
-            "qa_pairs": qa_pairs,
-            "advocacy": new_advocacy,
-            "criticism": new_criticism,
-        }
-        return parsed
+        return self._assemble_result(qa_pairs, all_advocacy, all_criticism, per_pair_judges)
 
     def regrade_answer(
         self,
