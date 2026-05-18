@@ -44,14 +44,6 @@ def _strip_fence(text: str) -> str:
     return text.strip()
 
 
-def _parse_list(raw: str, key: str) -> list[dict[str, object]]:
-    """Safely parse a JSON array from a raw task output string."""
-    try:
-        return json.loads(_strip_fence(raw)).get(key, [])  # type: ignore[no-any-return]
-    except (json.JSONDecodeError, AttributeError, TypeError):
-        return []
-
-
 def _parse_qa_pairs(raw: str) -> list[dict[str, Any]]:
     """Parse Q&A pairs from extraction output, handling common LLM wrapping variations.
 
@@ -92,9 +84,6 @@ def _parse_qa_pairs(raw: str) -> list[dict[str, Any]]:
             result.append(item_d)
 
     return result
-
-    return result
-
 
 def _make_agents(llm: LLM) -> dict[str, Agent]:
     config: dict[str, Any] = {}
@@ -336,26 +325,6 @@ class InterviewAnalysisCrew:
             per_pair_judges.append(judge_entry)
 
         return self._assemble_result(qa_pairs, advocacy, criticism, per_pair_judges)
-
-    def run_from_debate(
-        self,
-        qa_pairs: list[dict[str, Any]],
-        enrichment: str | None = None,
-    ) -> dict[str, Any]:
-        """Run advocate + critic + judge per Q&A pair."""
-        all_advocacy: list[dict[str, Any]] = []
-        all_criticism: list[dict[str, Any]] = []
-        per_pair_judges: list[dict[str, Any]] = []
-
-        for qa_pair in qa_pairs:
-            advocacy_entry, criticism_entry, judge_entry = self._run_pair_debate(
-                qa_pair
-            )
-            all_advocacy.append(advocacy_entry)
-            all_criticism.append(criticism_entry)
-            per_pair_judges.append(judge_entry)
-
-        return self._assemble_result(qa_pairs, all_advocacy, all_criticism, per_pair_judges)
 
     def regrade_answer(
         self,
